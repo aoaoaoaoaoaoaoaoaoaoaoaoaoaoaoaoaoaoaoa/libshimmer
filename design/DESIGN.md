@@ -309,17 +309,38 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 
 **D1 Home.** [S] Own repository and crate, `libshimmer`, because other hosts should not depend on a fork of codex. crates.io's `shimmer` is a wikitext parser, and `libgrid` set the naming precedent.
 
-**D2 Paint target.** [D] (a) Paint as plain data (`Row`, `Ink`, `Rgb`), with an optional `ratatui` feature built on `ratatui-core`, the crate ratatui designates for widget libraries. (b) Paint as ratatui types throughout. Chosen: (a). The reel already flattens paint into cells, and codex-tui and memview both build on ratatui 0.30.2, whose types come from `ratatui-core`, so the feature costs codex-tui nothing.
+**D2 Paint target.** [D]
+
+- [x] (a) Paint as plain data (`Row`, `Ink`, `Rgb`), with an optional `ratatui` feature built on `ratatui-core`, the crate ratatui designates for widget libraries.
+- [ ] (b) Paint as ratatui types throughout.
+
+The reel already flattens paint into cells, and codex-tui and memview both build on ratatui 0.30.2, whose types come from `ratatui-core`, so the feature costs codex-tui nothing.
 
 **D3 Time.** [S] The host passes Δt; libshimmer owns the fixed-step accumulator and the stale cutoff. Reading the wall clock would break P1 to P4, and the picker, the reel, and tests all run on time that is not the wall's.
 
-**D4 Work signal.** [O] (a) A sticky `Intensity` beside `Spell`. (b) The host pushes whole quanta. (c) The host pushes lumps of work, which libshimmer drains. Lean: (a): the host sets one number whenever it likes, and codex-tui's `Feed` already computes a rate. This extends the sketch's two inputs, a text and a scalar, with `Spell`, because `stage.busy()` is the stage member shaders read most (56 reads).
+**D4 Work signal.** [O]
 
-**D5 Openness.** [D] (a) Closed catalog: `Shader`, `Stage`, and `kit` stay crate-private. (b) Public `Shader` for third-party shimmers. Chosen: (a). Opening later is a minor release and closing a major one, and (b) would freeze the stage's members.
+- [x] (a) A sticky `Intensity` beside `Spell`.
+- [ ] (b) The host pushes whole quanta.
+- [ ] (c) The host pushes lumps of work, which libshimmer drains.
+
+The host sets one number whenever it likes, and codex-tui's `Feed` already computes a rate. This extends the sketch's two inputs, a text and a scalar, with `Spell`, because `stage.busy()` is the stage member shaders read most (56 reads).
+
+**D5 Openness.** [D]
+
+- [x] (a) Closed catalog: `Shader`, `Stage`, and `kit` stay crate-private.
+- [ ] (b) Public `Shader` for third-party shimmers.
+
+Opening later is a minor release and closing a major one, and (b) would freeze the stage's members.
 
 **D6 Randomness.** [S] Each shimmer takes a seed at construction and draws from a crate-internal SplitMix64; the `rand` dependency, used today by lfsr, cambrian, and turing, goes. P2 requires it, and it stops the reel's Turing and Cambrian takes from changing between exports.
 
-**D7 Bout end.** [D] (a) `Spell::Idle`, whose entry delivers `pause`. (b) `pause()` beside a two-state `Spell`. Chosen: (a). Busy, waiting, and between bouts are exclusive states, so they belong to one enum, which also makes a lost or doubled pause impossible (P5).
+**D7 Bout end.** [D]
+
+- [x] (a) `Spell::Idle`, whose entry delivers `pause`.
+- [ ] (b) `pause()` beside a two-state `Spell`.
+
+Busy, waiting, and between bouts are exclusive states, so they belong to one enum, which also makes a lost or doubled pause impossible (P5).
 
 **D8 Reset.** [D] No reset command. Clearing the caption is `show("")`; ending a bout is `set_spell(Idle)`; a new world is `Shimmer::new`. Each meaning of "reset" gets its own name.
 
@@ -329,17 +350,36 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 
 **D11 Names.** [O] `Engine` becomes `Shimmer`, the trait `Shimmer` becomes `Shader`, the header becomes the caption, and paced tokens become quanta. Lean: as listed, because the type a host holds should carry the library's name, and a token is a language model's unit.
 
-**D12 Painting while idle.** [D] (a) As in `Wait`. (b) As in `Busy` at zero intensity. (c) A host error. Chosen: (a), which every shader already does, because `stage.busy()` is false. codex-tui never paints then; a host that keeps its status line would.
+**D12 Painting while idle.** [D]
+
+- [x] (a) As in `Wait`.
+- [ ] (b) As in `Busy` at zero intensity.
+- [ ] (c) A host error.
+
+Every shader already does (a), because `stage.busy()` is false. codex-tui never paints then; a host that keeps its status line would.
 
 **D13 Line width.** [D] The host does not pass the line's width. The only bound today is a test that holds backdrops to 80 columns, and the host clips the rest; a width input waits for a host that needs one.
 
 **D14 Octants.** [R] Assumes every target terminal draws the Unicode 16 octants that phyllotaxis and tetromino paint. Failure would show as missing-glyph boxes in those recipes. Probe: print one octant line in each target terminal; if any fails, add a quadrant fallback the host can request.
 
-**D15 Distribution.** [O] (a) crates.io, from which any host, and every machine that builds codex-1337, fetches without credentials. (b) A private git dependency, which every such machine must be able to fetch. Lean: (a).
+**D15 Distribution.** [O]
 
-**D16 Second host.** [O] (a) memview, a second ratatui 0.30.2 host, adopts libshimmer in the first release. (b) codex-tui is the only host at first. Lean: (a), because a boundary drawn from one host is untested.
+- [x] (a) crates.io, from which any host, and every machine that builds codex-1337, fetches without credentials.
+- [ ] (b) A private git dependency, which every such machine must be able to fetch.
 
-**D17 Lumps of work.** [D] codex-tui's `Feed` and `Script` both drain lumps of work over `DRAIN` (4 s) and share that constant today. (a) libshimmer exports a `Reservoir` that turns lumps into intensity, used by both. (b) Each keeps its own constant. Chosen: (a), so the concept keeps one owner.
+**D16 Second host.** [O]
+
+- [x] (a) memview, a second ratatui 0.30.2 host, adopts libshimmer in the first release.
+- [ ] (b) codex-tui is the only host at first.
+
+A boundary drawn from one host is untested.
+
+**D17 Lumps of work.** [D] codex-tui's `Feed` and `Script` both drain lumps of work over `DRAIN` (4 s) and share that constant today.
+
+- [x] (a) libshimmer exports a `Reservoir` that turns lumps into intensity, used by both.
+- [ ] (b) Each keeps its own constant.
+
+(a) gives the concept one owner.
 
 **D18 Lead width.** [R] Assumes every shader keeps each letter at its grapheme's width, as P7 promises. Failure would show as a timer that shifts when a shader substitutes a glyph for a wide letter. Probe: P7's test across `ROSTER`, run before the extraction.
 
