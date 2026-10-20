@@ -1,22 +1,23 @@
 # libshimmer design
 
-Draft 1, 2026-10-20. Subject: moving codex-tui's shimmers into a crate that any terminal UI can use.
+Draft 2, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 2 adopts the vitruvius format: open questions became marked decisions, the cut view moved its callers into a table, and the appendix gained a usage example.
 
-Each view answers one question in a fixed notation, with its legend beneath it. Numbered items are review handles: "D4: (b)", "P7 is too strong", "Q1: (a)".
+<!-- digest -->
 
-| § | View | Question | Notation |
-|---|---|---|---|
-| 0 | Remit | What is libshimmer for? | purpose, operational principle, exclusions |
-| 1 | Boundary | What does libshimmer own, and what crosses its edge? | context diagram, ownership table |
-| 2 | Cut | Where does today's code divide? | module graph |
-| 3 | Nouns | Which types exist, and how do they relate? | UML class diagram, glossary |
-| 4 | Lifecycle | Which states does a shimmer pass through? | UML state machine |
-| 5 | Frame | What does a host do each frame? | UML sequence diagram |
-| 6 | Promises | What always holds? | invariants with their checks |
-| 7 | Decisions | What was chosen over what? | options, choice, reason |
-| 8 | Questions | What remains open? | options, current lean |
+| § | Chapter | Question |
+|---|---|---|
+| 1 | Remit | What is libshimmer for, and not for? |
+| 2 | Boundary | What does libshimmer own, and what crosses its edge? |
+| 3 | Cut | Where does today's code divide? |
+| 4 | Nouns | Which types exist, and how do they relate? |
+| 5 | Lifecycle | Which states does a shimmer pass through? |
+| 6 | Protocol | What does a host do each frame? |
+| 7 | Promises | What always holds? |
+| 8 | Decisions | What was chosen over what? |
 
-## 0 Remit
+Answer by handle: "D4: (b)", "P7 is too strong".
+
+## 1 Remit
 
 **Purpose.** Dress a terminal status line with an animation that follows the host's work.
 
@@ -26,31 +27,31 @@ Each view answers one question in a fixed notation, with its legend beneath it. 
 
 **Prior art.** `tui-shimmer`, written for the VT Code coding agent, styles text spans by animation phase; `tachyonfx` composes time-driven effects for ratatui. Neither takes a measure of the host's work.
 
-## 1 Boundary
+## 2 Boundary
 
 ```mermaid
-flowchart LR
-  classDef outside fill:#1a1f26,stroke:#6e7681,color:#c9d1d9
-  classDef host fill:#0f2740,stroke:#58a6ff,color:#e6edf3
-  classDef lib fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff,stroke-width:2px
-  classDef dep fill:#12161c,stroke:#6e7681,color:#8b949e,stroke-dasharray:5 4
+flowchart TB
+  classDef subject fill:#e8f1fb,stroke:#0b5cad,stroke-width:1.5px,color:#111
+  classDef host fill:#fff,stroke:#333,color:#111
+  classDef outside fill:#f3f3f3,stroke:#888,color:#333
+  classDef dep fill:#fff,stroke:#888,color:#555,stroke-dasharray:4 3
 
   work["<b>Work source</b><br/>codex-tui: the app server"]:::outside
-  host["<b>Host TUI</b><br/>codex-tui, memview, …<br/><br/>owns the terminal,<br/>the frame loop, layout,<br/>measuring work, colors,<br/>motion preference,<br/>the user's choice"]:::host
-  lib["<b>libshimmer</b><br/><br/>owns the stock catalog,<br/>each world and its clock,<br/>pacing, paint"]:::lib
+  host["<b>Host TUI</b><br/>codex-tui, memview, …<br/>owns the terminal, frame loop,<br/>layout, work measurement,<br/>colors, motion, the choice"]:::host
   term["<b>Terminal</b>"]:::outside
+  lib["<b>libshimmer</b><br/>owns the catalog, each<br/>world and its clock,<br/>pacing, paint"]:::subject
   core["ratatui-core"]:::dep
   seg["unicode-segmentation"]:::dep
 
-  work -->|"turn, tool and<br/>usage events"| host
-  host -->|"recipe, seed<br/>caption, spell, intensity<br/>Δt; palette, motion"| lib
+  work -->|"turn, tool, usage events"| host
+  host -->|frames| term
+  host -->|"recipe, seed, caption,<br/>spell, intensity, Δt,<br/>palette, motion"| lib
   lib -->|"paint: Row, Ink<br/>catalog: ROSTER"| host
-  host -->|"frames"| term
   lib -.->|"feature ratatui"| core
   lib -.-> seg
 ```
 
-Blue: the host. Violet: libshimmer. Grey: outside both. Dashed grey box and arrow: a Cargo dependency. A solid arrow carries the data on its label in its direction. The host initiates every exchange; libshimmer never calls out.
+Blue: libshimmer. White: the host. Grey: outside both. Dashed: a Cargo dependency. A solid arrow carries the data on its label in its direction. The host initiates every exchange; libshimmer never calls out.
 
 | Concern | Owner | Crossing |
 |---|---|---|
@@ -67,53 +68,55 @@ Blue: the host. Violet: libshimmer. Grey: outside both. Dashed grey box and arro
 | randomness | libshimmer, seeded by the host | `seed` |
 | stock catalog | libshimmer | `ROSTER` |
 
-## 2 Cut
+## 3 Cut
 
 ```mermaid
 flowchart TB
-  classDef caller fill:#0f2740,stroke:#58a6ff,color:#e6edf3
-  classDef changed fill:#0f2740,stroke:#58a6ff,color:#e6edf3,stroke-width:3px
-  classDef moved fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
+  classDef host fill:#fff,stroke:#333,color:#111
+  classDef changed fill:#fff,stroke:#111,stroke-width:2.5px,color:#111
+  classDef subject fill:#e8f1fb,stroke:#0b5cad,color:#111
 
   subgraph tui["stays in codex-tui"]
-    protocol["chatwidget/protocol.rs"]:::caller
-    indicator["status_indicator_widget.rs"]:::caller
-    rows["motion.rs<br/>running-tool rows"]:::caller
-    boot["lib.rs<br/>startup_draft.rs"]:::caller
-    slash["chatwidget/<br/>slash_dispatch.rs"]:::caller
-    live["shimmers/live.rs<br/>Feed, singleton, colors,<br/>presentation gate"]:::changed
+    callers["7 call sites<br/>listed below"]:::host
+    live["shimmers/live.rs<br/>Feed, singleton,<br/>colors, presentation"]:::changed
     picker["shimmers/picker.rs"]:::changed
     reel["shimmers/reel.rs<br/>test only"]:::changed
   end
   subgraph lib["moves to libshimmer"]
-    engine["engine.rs<br/>→ Shimmer"]:::moved
-    script["script.rs<br/>→ preview::Script"]:::moved
-    stock["17 shimmer files, ROSTER<br/>→ stock"]:::moved
-    stagefile["stage.rs<br/>→ Stage, Shader, paint"]:::moved
-    kit["kit.rs<br/>→ kit"]:::moved
+    engine["engine.rs<br/>→ Shimmer"]:::subject
+    script["script.rs<br/>→ preview::Script"]:::subject
+    stock["17 shimmers, ROSTER<br/>→ stock"]:::subject
+    stagefile["stage.rs<br/>→ Stage, Shader, paint"]:::subject
+    kit["kit.rs → kit"]:::subject
   end
 
-  protocol -->|observe| live
-  indicator -->|"dress_status<br/>shade_status"| live
-  rows -->|tool_mark| live
-  boot -->|"engage_random<br/>follow_presentation"| live
-  slash -->|picker| picker
+  callers -->|"6 calls"| live
+  callers -->|picker| picker
   picker --> live
   reel --> picker
-  live ==>|"Shimmer, Spell, Palette,<br/>ROSTER, TICK"| lib
+  live ==>|"Shimmer, Spell,<br/>Palette, ROSTER, TICK"| lib
   picker ==>|"Shimmer, Script,<br/>ROSTER"| lib
-  reel ==>|"Shimmer"| lib
+  reel ==>|Shimmer| lib
   engine --> stagefile
   stock --> stagefile
   stock --> kit
   script --> stagefile
-  style tui fill:#0b1622,stroke:#58a6ff
-  style lib fill:#160f24,stroke:#bc8cff
+  style tui fill:#fafafa,stroke:#888
+  style lib fill:#f4f8fd,stroke:#0b5cad
 ```
 
-Thin arrows are calls inside one side; thick arrows cross the cut, and their labels are the public API they need. Bold-bordered files stay but change. The seven calls codex-tui makes into `shimmers` keep their signatures, because `live.rs` absorbs the change.
+Thin arrows are calls within a side; thick arrows cross the cut, labelled with the public API they need. A thick border marks a file that stays but changes. The seven calls into `shimmers` keep their signatures, because `live.rs` absorbs the change:
 
-| Today, in `codex-rs/tui/src/shimmers/` | Destination |
+| Caller in `codex-rs/tui/src/` | Calls |
+|---|---|
+| `chatwidget/protocol.rs` | `observe` |
+| `status_indicator_widget.rs` | `dress_status`, `shade_status` |
+| `motion.rs` | `tool_mark` |
+| `lib.rs` | `engage_random` |
+| `startup_draft.rs` | `follow_presentation` |
+| `chatwidget/slash_dispatch.rs` | `picker` |
+
+| Today, in `shimmers/` | Destination |
 |---|---|
 | `stage.rs` | `Stage`, `Shader`, `Spell`, paint types |
 | `engine.rs` | `Shimmer`; its span conversion moves to the `ratatui` feature |
@@ -123,7 +126,7 @@ Thin arrows are calls inside one side; thick arrows cross the cut, and their lab
 | `live.rs` | stays: `Feed`, the process singleton, color detection, the presentation gate |
 | `picker.rs`, `reel.rs` | stay, rebuilt on the public API |
 
-## 3 Nouns
+## 4 Nouns
 
 ```mermaid
 classDiagram
@@ -198,16 +201,16 @@ classDiagram
   Row "1" *-- "*" Ink
   Stage *-- Spell
   Stage *-- Intensity
-  style Shimmer fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
-  style Recipe fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
-  style ROSTER fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
-  style Spell fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
-  style Intensity fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
-  style Row fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
-  style Ink fill:#2a1d45,stroke:#bc8cff,color:#f5f0ff
+  style Shimmer fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Recipe fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style ROSTER fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Spell fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Intensity fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Row fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Ink fill:#e8f1fb,stroke:#0b5cad,color:#111
 ```
 
-Violet: public, its members marked `+`. Grey: crate-private, marked `~`. Filled diamond: owns, with multiplicities; arrow: refers to; dashed arrow: uses; dashed arrow with hollow triangle: implements. Members appear only where they carry the design. `LavaLamp` stands for all 17 stock shaders; `Palette`, `Motion`, and `Script` appear in the glossary only.
+Blue: public, members marked `+`. White: crate-private, marked `~`. Filled diamond: owns, with multiplicities; arrow: refers to; dashed arrow: uses; dashed arrow with hollow triangle: implements. `LavaLamp` stands for all 17 stock shaders; `Palette`, `Motion`, and `Script` appear in the glossary only.
 
 | Term | Meaning | Today |
 |---|---|---|
@@ -230,7 +233,7 @@ Violet: public, its members marked `+`. Grey: crate-private, marked `~`. Filled 
 | Bullet | The one-cell mark of a running sub-task | the tool mark |
 | Script | A looping canned bout that previews a recipe | `Script` |
 
-## 4 Lifecycle
+## 5 Lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -251,9 +254,9 @@ stateDiagram-v2
   end note
 ```
 
-Transitions read `command / effect`, and `pause` goes to the shader. Setting the current spell again is not a transition. The note's commands change data, not state: a changed caption restarts its age, and `advance` runs the ticks the clock owes (§3).
+Transitions read `command / effect`, and `pause` goes to the shader. Setting the current spell again is not a transition. The note's commands change data, not state: a changed caption restarts its age, and `advance` runs the ticks the clock owes (§4).
 
-## 5 Frame
+## 6 Protocol
 
 ```mermaid
 sequenceDiagram
@@ -264,20 +267,20 @@ sequenceDiagram
   participant D as Shader
   H->>S: new(recipe, seed)
   W-)H: bout starts
-  H->>S: set_spell(Busy), show("Planning"), set_intensity(0.4)
+  H->>S: set_spell(Busy), show(c), set_intensity(i)
   loop each frame, every TICK (32 ms)
     opt work changed since the last frame
       H->>S: show, set_spell, set_intensity
     end
     H->>S: advance(Δt)
     loop each whole tick owed
-      S->>S: stage takes the tick's quanta
+      S->>S: stage advances one tick
       S->>D: tick(stage)
     end
     H->>S: status(palette, motion)
     S->>D: status(stage, row)
     S-->>H: Row
-    Note over H: lays the lead beside its own spans,<br/>shades the backdrop
+    Note over H: lays the lead beside its<br/>own spans, shades the backdrop
   end
   W-)H: bout ends
   H->>S: set_spell(Idle)
@@ -286,7 +289,7 @@ sequenceDiagram
 
 Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop` repeats its contents; `opt` runs them only when its condition holds.
 
-## 6 Promises
+## 7 Promises
 
 | # | Promise | Today | Check |
 |---|---|---|---|
@@ -300,46 +303,47 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P8 | With still letters, the lead is the caption verbatim, without styling, tail, or backdrop; a still mark is absent. | holds | test across `ROSTER` |
 | P9 | No caption, intensity, or Δt causes a panic. | unverified | `Intensity::new` saturates; property test |
 | P10 | Ticks never read colors; colors exist only at paint. | broken by critter's tint | by construction: the stage holds no palette |
+| P11 | Apart from D6, D9, and D10, codex-tui's shimmers paint as before the extraction. | new | the reel's cell export of one scripted take per recipe, compared before and after |
 
-## 7 Decisions
+## 8 Decisions
 
-**D1 Home.** (a) Own repository and crate, `libshimmer`; crates.io's `shimmer` is a wikitext parser, and `libgrid` set the naming precedent. (b) A crate in codex-1337's workspace. Chosen: (a), because other hosts should not depend on a fork of codex.
+**D1 Home.** [S] Own repository and crate, `libshimmer`, because other hosts should not depend on a fork of codex. crates.io's `shimmer` is a wikitext parser, and `libgrid` set the naming precedent.
 
-**D2 Paint target.** (a) Paint as plain data (`Row`, `Ink`, `Rgb`), with an optional `ratatui` feature built on `ratatui-core`, the crate ratatui designates for widget libraries. (b) Paint as ratatui types throughout. Chosen: (a). The reel already flattens paint into cells, and codex-tui and memview both build on ratatui 0.30.2, whose types come from `ratatui-core`, so the feature costs codex-tui nothing.
+**D2 Paint target.** [D] (a) Paint as plain data (`Row`, `Ink`, `Rgb`), with an optional `ratatui` feature built on `ratatui-core`, the crate ratatui designates for widget libraries. (b) Paint as ratatui types throughout. Chosen: (a). The reel already flattens paint into cells, and codex-tui and memview both build on ratatui 0.30.2, whose types come from `ratatui-core`, so the feature costs codex-tui nothing.
 
-**D3 Time.** (a) The host passes Δt; libshimmer owns the fixed-step accumulator and the stale cutoff. (b) libshimmer reads the wall clock. Chosen: (a), for P1 to P4: the picker restarts its script, the reel films synthetic time, and tests should not wait.
+**D3 Time.** [S] The host passes Δt; libshimmer owns the fixed-step accumulator and the stale cutoff. Reading the wall clock would break P1 to P4, and the picker, the reel, and tests all run on time that is not the wall's.
 
-**D4 Work signal.** (a) A sticky `Intensity` beside `Spell`. (b) The host pushes whole quanta. (c) The host pushes lumps of work, which libshimmer drains. Chosen: (a). The host sets one number whenever it likes, codex-tui's `Feed` already computes a rate, and draining lumps models the host's domain. The sketch that prompted this design had two inputs, a text and a scalar; the shaders read a third, `stage.busy()`, more than any other stage member (56 reads), so `Spell` joins them.
+**D4 Work signal.** [O] (a) A sticky `Intensity` beside `Spell`. (b) The host pushes whole quanta. (c) The host pushes lumps of work, which libshimmer drains. Lean: (a): the host sets one number whenever it likes, and codex-tui's `Feed` already computes a rate. This extends the sketch's two inputs, a text and a scalar, with `Spell`, because `stage.busy()` is the stage member shaders read most (56 reads).
 
-**D5 Openness.** (a) Closed catalog: `Shader`, `Stage`, and `kit` stay crate-private. (b) Public `Shader` for third-party shimmers. Chosen: (a). Opening later is a minor release and closing a major one, and (b) would freeze the stage's members.
+**D5 Openness.** [D] (a) Closed catalog: `Shader`, `Stage`, and `kit` stay crate-private. (b) Public `Shader` for third-party shimmers. Chosen: (a). Opening later is a minor release and closing a major one, and (b) would freeze the stage's members.
 
-**D6 Randomness.** Each shimmer takes a seed at construction and draws from a crate-internal SplitMix64; the `rand` dependency, used today by lfsr, cambrian, and turing, goes. Reason: P2, which also stops the reel's Turing and Cambrian takes from changing between exports.
+**D6 Randomness.** [S] Each shimmer takes a seed at construction and draws from a crate-internal SplitMix64; the `rand` dependency, used today by lfsr, cambrian, and turing, goes. P2 requires it, and it stops the reel's Turing and Cambrian takes from changing between exports.
 
-**D7 Bout end.** (a) `Spell::Idle`, whose entry delivers `pause`. (b) `pause()` beside a two-state `Spell`. Chosen: (a). Busy, waiting, and between bouts are exclusive states, so they belong to one enum, which also makes a lost or doubled pause impossible (P5).
+**D7 Bout end.** [D] (a) `Spell::Idle`, whose entry delivers `pause`. (b) `pause()` beside a two-state `Spell`. Chosen: (a). Busy, waiting, and between bouts are exclusive states, so they belong to one enum, which also makes a lost or doubled pause impossible (P5).
 
-**D8 Reset.** No reset command. Clearing the caption is `show("")`; ending a bout is `set_spell(Idle)`; a new world is `Shimmer::new`. Reason: each of the three meanings of "reset" gets its own name.
+**D8 Reset.** [D] No reset command. Clearing the caption is `show("")`; ending a bout is `set_spell(Idle)`; a new world is `Shimmer::new`. Each meaning of "reset" gets its own name.
 
-**D9 Timer.** The status-line timer leaves the stage. Only critter reads it, for a gesture in the first two seconds of each minute, which moves onto shimmer time. Reason: hosts without a timer need not invent one.
+**D9 Timer.** [D] The status-line timer leaves the stage. Only critter reads it, for a gesture in the first two seconds of each minute, which moves onto shimmer time; hosts without a timer need not invent one.
 
-**D10 Palette.** Colors arrive only at paint. Critter, which smooths a color in `tick` today, smooths blend weights instead. Reason: P10; codex-tui also loses its `Engaged` state, which exists only to wait for colors before constructing an engine.
+**D10 Palette.** [D] Colors arrive only at paint. Critter, which smooths a color in `tick` today, smooths blend weights instead. This keeps P10, and codex-tui loses its `Engaged` state, which exists only to wait for colors before constructing an engine.
 
-**D11 Names.** `Engine` becomes `Shimmer`, the trait `Shimmer` becomes `Shader`, the header becomes the caption, and paced tokens become quanta. Reason: the type a host holds carries the library's name, and a token is a language model's unit.
+**D11 Names.** [O] `Engine` becomes `Shimmer`, the trait `Shimmer` becomes `Shader`, the header becomes the caption, and paced tokens become quanta. Lean: as listed, because the type a host holds should carry the library's name, and a token is a language model's unit.
 
-## 8 Questions
+**D12 Painting while idle.** [D] (a) As in `Wait`. (b) As in `Busy` at zero intensity. (c) A host error. Chosen: (a), which every shader already does, because `stage.busy()` is false. codex-tui never paints then; a host that keeps its status line would.
 
-**Q1** What does a shimmer paint while `Idle`? codex-tui never paints then; a host that keeps its status line would. (a) As in `Wait`. (b) As in `Busy` at zero intensity. (c) Painting while `Idle` is a host error. Lean: (a), which every shader already does, because `stage.busy()` is false.
+**D13 Line width.** [D] The host does not pass the line's width. The only bound today is a test that holds backdrops to 80 columns, and the host clips the rest; a width input waits for a host that needs one.
 
-**Q2** Should the host pass the line's width? The only bound today is a test that holds backdrops to 80 columns; the host clips the rest. Lean: no, until a host needs it.
+**D14 Octants.** [R] Assumes every target terminal draws the Unicode 16 octants that phyllotaxis and tetromino paint. Failure would show as missing-glyph boxes in those recipes. Probe: print one octant line in each target terminal; if any fails, add a quadrant fallback the host can request.
 
-**Q3** Recipes that paint Unicode 16 octants (phyllotaxis, tetromino) show missing glyphs in terminals and fonts without them. (a) A quadrant fallback the host can request. (b) Octants required. Lean: (b), until a host reports the problem.
+**D15 Distribution.** [O] (a) crates.io, from which any host, and every machine that builds codex-1337, fetches without credentials. (b) A private git dependency, which every such machine must be able to fetch. Lean: (a).
 
-**Q4** Distribution. (a) crates.io: any host, and every machine that builds codex-1337, fetches it without credentials. (b) A private git dependency, which every such machine must be able to fetch. Lean: (a).
+**D16 Second host.** [O] (a) memview, a second ratatui 0.30.2 host, adopts libshimmer in the first release. (b) codex-tui is the only host at first. Lean: (a), because a boundary drawn from one host is untested.
 
-**Q5** Should memview, a second ratatui 0.30.2 host, adopt libshimmer in the first release? Lean: yes; a boundary drawn from one host is untested.
+**D17 Lumps of work.** [D] codex-tui's `Feed` and `Script` both drain lumps of work over `DRAIN` (4 s) and share that constant today. (a) libshimmer exports a `Reservoir` that turns lumps into intensity, used by both. (b) Each keeps its own constant. Chosen: (a), so the concept keeps one owner.
 
-**Q6** codex-tui's `Feed` and `Script` both drain lumps of work over `DRAIN` (4 s) and share that constant today. (a) libshimmer exports a `Reservoir` that turns lumps into intensity, used by both. (b) Each keeps its own constant. Lean: (a), so the concept keeps one owner.
+**D18 Lead width.** [R] Assumes every shader keeps each letter at its grapheme's width, as P7 promises. Failure would show as a timer that shifts when a shader substitutes a glyph for a wide letter. Probe: P7's test across `ROSTER`, run before the extraction.
 
-## Appendix: public API sketch
+## Appendix: API sketch and usage
 
 Uncompiled; the first implementation step compiles it.
 
@@ -423,4 +427,23 @@ pub mod ratatui {
         pub fn span(self, text: &str) -> Span<'static>;
     }
 }
+```
+
+```rust
+// A ratatui host, start to finish.
+let mut shimmer = Shimmer::new(stock::named("Lava Lamp").unwrap(), seed);
+shimmer.set_spell(Spell::Busy);
+shimmer.show("Compiling");
+
+// Each frame:
+shimmer.set_intensity(Intensity::new(tokens_per_second / 100.0));
+shimmer.advance(now - last_frame);
+let row = shimmer.status(palette, Motion { mark: true, letters: true });
+let mut spans = row.spans();
+spans.push(timer_span);
+Line::from(spans).render(area, buf);
+row.shade(area, buf);
+
+// When the work ends:
+shimmer.set_spell(Spell::Idle);
 ```
