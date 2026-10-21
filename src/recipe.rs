@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt;
 
 use crate::gauge::Gauge;
+use crate::kit::OCTANTS;
 use crate::stage::Shader;
 
 /// Glyph repertoires beyond the base set every target terminal draws: those a terminal draws, or
@@ -30,6 +31,13 @@ impl Glyphs {
 
     const fn without(self, other: Self) -> Self {
         Self(self.0 & !other.0)
+    }
+
+    /// The glyph of the octant repertoire whose 2×4 cell lights `pixels`: bit `2 * y + x` lights
+    /// the pixel in column `x` of row `y`, counting rows from the top. Unicode encodes some
+    /// patterns outside the octant block, among them the base set's block elements.
+    pub fn octant(pixels: u8) -> char {
+        OCTANTS[usize::from(pixels)]
     }
 }
 
