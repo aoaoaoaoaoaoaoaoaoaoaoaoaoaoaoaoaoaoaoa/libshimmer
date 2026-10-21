@@ -1,6 +1,6 @@
 # libshimmer design
 
-Draft 5, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 5 replaces the remit with a synopsis, and adds the host, the reservoir, and the parts of a lead to the glossary.
+Draft 6, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 6 records the owner's answer to D12, renames the shader's `pause` to `idle`, and opens D19 on the insert.
 
 <!-- digest -->
 
@@ -27,7 +27,7 @@ A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructo
 
 The host tells the shimmer what it is doing. The **Spell** is `Busy` while the host produces, `Wait` while it is blocked on something external, and `Idle` otherwise; a **Bout** is a stretch of `Busy` and `Wait` between two `Idle`s, such as one turn of the codex agent. The **Intensity** is how hard the host works: a number of at least 0, where 1.0 is brisk, measuring whatever the host chooses. libshimmer converts intensity into whole units of paced work, each a **Quantum**. A host that learns of work in lumps, such as a burst of tokens, can pass them to a **Reservoir**, which drains each lump into intensity over four seconds. A **Script** plays a canned bout in a loop, with which a picker previews a recipe.
 
-A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies and change while the host waits; when a bout ends, the shader is told once, and settles.
+A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once.
 
 To draw a frame, the host asks the shimmer for its row, passing its **Palette**, the terminal's default foreground and background colors, and its **Motion**, which says whether the mark and the letters may move. Painting changes nothing, and the paint depends only on the recipe, the seed, the commands so far, the palette, and the motion. The host lays the lead beside its own text, such as codex-tui's timer, and shades the line with the backdrop. A row is plain data; an optional feature converts it into ratatui spans and shades a ratatui buffer.
 
@@ -221,7 +221,7 @@ classDiagram
   class Shader {
     <<trait>>
     ~tick(stage)
-    ~pause(stage)
+    ~idle(stage)
     ~status(stage, row)
     ~bullet(stage) Ink
   }
@@ -285,7 +285,7 @@ stateDiagram-v2
     Busy --> Wait: set_spell(Wait)
     Wait --> Busy: set_spell(Busy)
   }
-  Bout --> Idle: set_spell(Idle) / pause
+  Bout --> Idle: set_spell(Idle) / idle
   note left of Idle
     Any state, no transition:
     show(caption)
@@ -294,7 +294,7 @@ stateDiagram-v2
   end note
 ```
 
-Transitions read `command / effect`, and `pause` goes to the shader. Setting the current spell again is not a transition. The note's commands change data, not state: a changed caption restarts its age, and `advance` runs the ticks the clock owes (§4). A recipe that does not fit the host yields `Unfit` instead of a shimmer (D14, D18).
+Transitions read `command / effect`, and `idle` goes to the shader. Setting the current spell again is not a transition. The note's commands change data, not state: a changed caption restarts its age, and `advance` runs the ticks the clock owes (§4). A recipe that does not fit the host yields `Unfit` instead of a shimmer (D14, D18). Ticks and paint run in every state, `Idle` included (D12).
 
 ## 6 Protocol
 
@@ -308,7 +308,7 @@ sequenceDiagram
   H->>S: new(recipe, seed, glyphs)
   W-)H: bout starts
   H->>S: set_spell(Busy), show(c), set_intensity(i)
-  loop each frame, every TICK (32 ms)
+  loop each frame, every TICK (32 ms), in any spell
     opt work changed since the last frame
       H->>S: show, set_spell, set_intensity
     end
@@ -324,7 +324,7 @@ sequenceDiagram
   end
   W-)H: bout ends
   H->>S: set_spell(Idle)
-  S->>D: pause(stage)
+  S->>D: idle(stage)
 ```
 
 Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop` repeats its contents; `opt` runs them only when its condition holds.
@@ -337,7 +337,7 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P2 | Paint is a function of the recipe, the seed, the command sequence, the palette, and the motion. | broken by `rand` | property test: twin shimmers under one random command sequence paint alike |
 | P3 | A shimmer changes only at whole ticks: `advance(a)` then `advance(b)` equals `advance(a + b)` while both gaps stay within `STALE`. | holds, in `live.rs` | property test |
 | P4 | A gap longer than `STALE` (1 s) advances exactly one tick. | holds, in `live.rs` | unit test |
-| P5 | Each entry into `Idle` delivers exactly one `pause` to the shader, when commanded; nothing else delivers one. | new | unit test with a recording shader |
+| P5 | Each entry into `Idle` calls the shader's `idle` exactly once, when commanded; nothing else calls it. | new | unit test with a recording shader |
 | P6 | Painting changes nothing: `status` and `bullet` take `&self`. | new: `Engine::status` takes `&mut self` | signature |
 | P7 | The lead spans `len(mark) + (1 if mark) + width(caption) + (1 if insert) + len(tail)` columns, and the backdrop at most 80. | backdrop tested; lead unverified | paint refuses a substitute of another width (D18); test across `ROSTER` for mark, insert, and tail |
 | P8 | With still letters, the lead is the caption verbatim, without styling, tail, or backdrop; a still mark is absent. | holds | test across `ROSTER` |
@@ -379,10 +379,10 @@ Opening later is a minor release and closing a major one, and (b) would freeze t
 
 **D7 Bout end.** [D]
 
-- [x] (a) `Spell::Idle`, whose entry delivers `pause`.
-- [ ] (b) `pause()` beside a two-state `Spell`.
+- [x] (a) `Spell::Idle`, whose entry calls the shader's `idle`.
+- [ ] (b) A host command `pause()` beside a two-state `Spell`, as today.
 
-Busy, waiting, and between bouts are exclusive states, so they belong to one enum, which also makes a lost or doubled pause impossible (P5).
+Busy, waiting, and between bouts are exclusive states, so they belong to one enum, which also makes a lost or doubled call impossible (P5).
 
 **D8 Reset.** [D] No reset command. Clearing the caption is `show("")`; ending a bout is `set_spell(Idle)`; a new shimmer is `Shimmer::new`. Each meaning of "reset" gets its own name.
 
@@ -392,13 +392,13 @@ Busy, waiting, and between bouts are exclusive states, so they belong to one enu
 
 **D11 Names.** [X] `Engine` becomes `Shimmer`, the trait `Shimmer` becomes `Shader`, the header becomes the caption, and paced tokens become quanta, because the type a host holds should carry the library's name, and a token is a language model's unit. The owner agreed on 2026-10-20, provided the renaming is consistent: each noun in §4 keeps one name throughout libshimmer and the fork-owned code of its hosts (P12). Upstream-owned codex-tui files keep upstream's names, such as the status indicator's `header`, because the fork changes upstream files only at seams; the seam is where a header becomes a caption.
 
-**D12 Painting while idle.** [D]
+**D12 Painting while idle.** [X] The owner asked on 2026-10-20 that each shader decide.
 
-- [x] (a) As in `Wait`.
-- [ ] (b) As in `Busy` at zero intensity.
+- [x] (a) Each shader paints `Idle` as it chooses: with an animation of its own, which may be quieter, or as it paints `Wait`.
+- [ ] (b) As in `Wait`, always.
 - [ ] (c) A host error.
 
-Every shader already does (a), because `stage.busy()` is false. codex-tui never paints then; a host that keeps its status line would.
+Ticks and paint run in every spell, and the stage holds the spell and its age, so an idle animation needs no new input. The stock shaders paint `Idle` as `Wait` until one gains an animation of its own, because `stage.busy()` is false in both. codex-tui hides its status line while idle; a host that keeps it shows the shader's idle paint.
 
 **D13 Line width.** [D] The host does not pass the line's width. The only bound today is a test that holds backdrops to 80 columns, and the host clips the rest; a width input waits for a host that needs one.
 
@@ -436,6 +436,14 @@ A boundary drawn from one host is untested, and a second host exposes what is sp
 - [ ] (c) Every recipe paints wide graphemes.
 
 Either way, paint refuses a substitute glyph whose width differs from the grapheme it replaces, so P7 holds for every recipe, and the declaration states where a recipe looks right, not whether the timer moves. (a) costs a host that shows any text nothing, and makes an unchecked caption sent to a narrow shimmer a compile error; (b) finds that mistake at the first wide caption; (c) bans grid shaders by fiat. An audit of the 17 stock recipes found that all paint wide graphemes well under the guard, so all declare wide. Fourteen only color their letters; tectonic also inserts a fault cell between graphemes, which P7 counts and an existing test checks against a caption holding CJK and emoji. Lfsr substitutes bits only for one-cell letters, but it marks any tapped blank with `·`, including the two-cell ideographic space. Critter's sneeze and forge's steam substitute glyphs regardless of width, so today a wide caption moves the timer while either plays; the guard leaves such letters unsubstituted. One reel take per recipe, with a caption mixing narrow and wide graphemes, checks the guard and the declarations.
+
+**D19 Inserts.** [O] Only tectonic paints an insert: while busy, it opens a cell at its fault and draws `│` in it. Its lead is therefore one cell wider in `Busy` than in the other spells, so codex-tui's timer moves whenever tectonic enters or leaves `Busy`, and the insert is the only paint among the letters that belongs to no grapheme.
+
+- [x] (a) No inserts: the letters hold one ink per grapheme, and tectonic shows its fault by the color boundary between its two plates, which it already paints.
+- [ ] (b) One insert, as now, which a recipe that paints one keeps in every spell, so that its lead keeps its width.
+- [ ] (c) An optional ink at every boundary between letters.
+
+(a) removes `Insert`, its term in P7, and a branch of the paint, so that a caption spans exactly its own width in every recipe; tectonic loses its drawn crack, which joins P11's intentional changes. (b) keeps the crack and steadies the timer. (c) generalizes (b) for no recipe that needs it.
 
 ## Appendix: API sketch and usage
 
