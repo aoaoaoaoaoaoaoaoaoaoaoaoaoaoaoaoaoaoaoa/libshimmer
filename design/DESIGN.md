@@ -1,6 +1,6 @@
 # libshimmer design
 
-Draft 6, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 6 records the owner's answer to D12, renames the shader's `pause` to `idle`, and opens D19 on the insert.
+Draft 7, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 7 records the owner's choice for D19. The owner adopted the design on 2026-10-20, signed 𝓮𝓽𝓮𝓻𝓷𝓪𝓵𝓲𝓼𝓽.
 
 <!-- digest -->
 
@@ -21,7 +21,7 @@ Answer by handle: "D4: (b)", "P7 is too strong".
 
 libshimmer animates the status line of a terminal program in step with the program's work. A program that uses it is a **Host**. The animations exist today inside codex-tui, the terminal interface of the codex coding agent; libshimmer moves them into a crate of their own, which memview will also use.
 
-A **Shimmer** is one running animation. It dresses a **Caption**, the status line's text, such as "Working", and paints the line's **Lead**: a **Mark** of glyphs before the caption, the caption's **Letters**, at most one **Insert** cell between two letters, and a **Tail** of cells after them. Beneath the line it lays a **Backdrop** of background colors. The paint of one cell is an **Ink**, and the paint of the lead and the backdrop together is a **Row**. A shimmer also paints a **Bullet**, the one-cell glyph in front of a running sub-task, such as a tool call.
+A **Shimmer** is one running animation. It dresses a **Caption**, the status line's text, such as "Working", and paints the line's **Lead**: a **Mark** of glyphs before the caption, the caption's **Letters**, and a **Tail** of cells after them. Beneath the line it lays a **Backdrop** of background colors. The paint of one cell is an **Ink**, and the paint of the lead and the backdrop together is a **Row**. A shimmer also paints a **Bullet**, the one-cell glyph in front of a running sub-task, such as a tool call.
 
 A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructor for the recipe's **Shader**, the animation itself. The **ROSTER** lists the 17 stock recipes, such as Lava Lamp, in the order a picker shows them; hosts cannot add recipes of their own. The host chooses the recipe, through a picker or otherwise, and seeds the shimmer's randomness.
 
@@ -260,10 +260,9 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Quantum | One whole unit of paced work, as the stage counts it | a paced token |
 | Reservoir | Turns lumps of work into intensity, draining each over 4 s | the drains in `Feed` and `Script` |
 | Caption | The text a shimmer dresses | `header` |
-| Lead | The part of the status line a shimmer paints: mark, letters, insert, and tail | unnamed |
+| Lead | The part of the status line a shimmer paints: mark, letters, and tail | unnamed |
 | Mark | Cells of glyphs before the caption, then a space; absent when the mark may not move | `mark` in `Row` |
 | Letters | The caption's graphemes as painted, one ink each; a glyph may stand in for a letter | `header` in `Row` |
-| Insert | One cell at a boundary between two letters, replacing no text | `header_insert` |
 | Tail | Cells between the letters and the host's text, such as the timer | `tail` |
 | Backdrop | Background colors laid under the line from its first column, whatever text lands there; at most 80 columns | `backdrop` |
 | Palette | The terminal's default foreground and background | `Palette` |
@@ -339,11 +338,11 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P4 | A gap longer than `STALE` (1 s) advances exactly one tick. | holds, in `live.rs` | unit test |
 | P5 | Each entry into `Idle` calls the shader's `idle` exactly once, when commanded; nothing else calls it. | new | unit test with a recording shader |
 | P6 | Painting changes nothing: `status` and `bullet` take `&self`. | new: `Engine::status` takes `&mut self` | signature |
-| P7 | The lead spans `len(mark) + (1 if mark) + width(caption) + (1 if insert) + len(tail)` columns, and the backdrop at most 80. | backdrop tested; lead unverified | paint refuses a substitute of another width (D18); test across `ROSTER` for mark, insert, and tail |
+| P7 | The lead spans `len(mark) + (1 if mark) + width(caption) + len(tail)` columns, and the backdrop at most 80. | backdrop tested; lead unverified | paint refuses a substitute of another width (D18); test across `ROSTER` for mark and tail |
 | P8 | With still letters, the lead is the caption verbatim, without styling, tail, or backdrop; a still mark is absent. | holds | test across `ROSTER` |
 | P9 | No caption, intensity, or Δt causes a panic. | unverified | `Intensity::new` saturates; property test |
 | P10 | Ticks never read colors; colors exist only at paint. | broken by critter's tint | by construction: the stage holds no palette |
-| P11 | Apart from D6, D9, D10, and D18's width guard, codex-tui's shimmers paint as before the extraction. | new | the reel's cell export of one scripted take per recipe, compared before and after |
+| P11 | Apart from D6, D9, D10, D18's width guard, and D19's tectonic, codex-tui's shimmers paint as before the extraction. | new | the reel's cell export of one scripted take per recipe, compared before and after |
 | P12 | Each noun in §4 has one name throughout libshimmer and the fork-owned code of its hosts: no name it replaces survives there. | new | `rg` for each replaced name after the extraction |
 | P13 | A recipe paints only the base glyphs and the repertoires it declares. | new | test across `ROSTER` on every glyph of the reel's scripted take |
 
@@ -435,15 +434,15 @@ A boundary drawn from one host is untested, and a second host exposes what is sp
 - [ ] (b) The same declaration, checked at run time: `show` refuses a wide grapheme sent to a recipe that paints only narrow ones.
 - [ ] (c) Every recipe paints wide graphemes.
 
-Either way, paint refuses a substitute glyph whose width differs from the grapheme it replaces, so P7 holds for every recipe, and the declaration states where a recipe looks right, not whether the timer moves. (a) costs a host that shows any text nothing, and makes an unchecked caption sent to a narrow shimmer a compile error; (b) finds that mistake at the first wide caption; (c) bans grid shaders by fiat. An audit of the 17 stock recipes found that all paint wide graphemes well under the guard, so all declare wide. Fourteen only color their letters; tectonic also inserts a fault cell between graphemes, which P7 counts and an existing test checks against a caption holding CJK and emoji. Lfsr substitutes bits only for one-cell letters, but it marks any tapped blank with `·`, including the two-cell ideographic space. Critter's sneeze and forge's steam substitute glyphs regardless of width, so today a wide caption moves the timer while either plays; the guard leaves such letters unsubstituted. One reel take per recipe, with a caption mixing narrow and wide graphemes, checks the guard and the declarations.
+Either way, paint refuses a substitute glyph whose width differs from the grapheme it replaces, so P7 holds for every recipe, and the declaration states where a recipe looks right, not whether the timer moves. (a) costs a host that shows any text nothing, and makes an unchecked caption sent to a narrow shimmer a compile error; (b) finds that mistake at the first wide caption; (c) bans grid shaders by fiat. An audit of the 17 stock recipes found that all paint wide graphemes well under the guard, so all declare wide. Thirteen only color their letters. Tectonic draws `│` in place of the letter at its fault (D19). Lfsr substitutes bits only for one-cell letters, but it marks any tapped blank with `·`, including the two-cell ideographic space. Critter's sneeze and forge's steam substitute glyphs regardless of width, so today a wide caption moves the timer while either plays; the guard leaves such letters unsubstituted, as it does a wide letter at tectonic's fault. One reel take per recipe, with a caption mixing narrow and wide graphemes, checks the guard and the declarations.
 
-**D19 Inserts.** [O] Only tectonic paints an insert: while busy, it opens a cell at its fault and draws `│` in it. Its lead is therefore one cell wider in `Busy` than in the other spells, so codex-tui's timer moves whenever tectonic enters or leaves `Busy`, and the insert is the only paint among the letters that belongs to no grapheme.
+**D19 Inserts.** [X] The owner chose (a) on 2026-10-20, with tectonic going back to replacing the letter at its fault. Only tectonic paints an insert today: while busy, it opens a cell at its fault and draws `│` in it. Its lead is therefore one cell wider in `Busy` than in the other spells, so codex-tui's timer moves whenever tectonic enters or leaves `Busy`, and the insert is the only paint among the letters that belongs to no grapheme.
 
-- [x] (a) No inserts: the letters hold one ink per grapheme, and tectonic shows its fault by the color boundary between its two plates, which it already paints.
+- [x] (a) No inserts: the letters hold one ink per grapheme, and tectonic draws `│` in place of the letter at its fault.
 - [ ] (b) One insert, as now, which a recipe that paints one keeps in every spell, so that its lead keeps its width.
 - [ ] (c) An optional ink at every boundary between letters.
 
-(a) removes `Insert`, its term in P7, and a branch of the paint, so that a caption spans exactly its own width in every recipe; tectonic loses its drawn crack, which joins P11's intentional changes. (b) keeps the crack and steadies the timer. (c) generalizes (b) for no recipe that needs it.
+(a) removes the insert, its term in P7, and a branch of the paint, so that a caption spans exactly its own width in every recipe; tectonic's crack hides the letter at its fault, an intentional change that P11 lists. (b) keeps the letter and steadies the timer. (c) generalizes (b) for no recipe that needs it.
 
 ## Appendix: API sketch and usage
 
