@@ -1,2 +1,4 @@
+/target
+/.worktrees/
 /design/*.html
 /design/*.pdf
