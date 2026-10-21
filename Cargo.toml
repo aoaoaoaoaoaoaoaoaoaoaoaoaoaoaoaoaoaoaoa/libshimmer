@@ -1,0 +1,129 @@
+[workspace]
+members = ["."]
+resolver = "3"
+
+[package]
+name = "libshimmer"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+description = "Animated status lines for terminal UIs, paced by the host's work"
+repository = "https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/libshimmer"
+readme = "README.md"
+keywords = ["tui", "terminal", "animation", "ratatui", "status"]
+categories = ["command-line-interface"]
+include = ["/src", "/README.md", "/LICENSE"]
+
+[lints]
+workspace = true
+
+[features]
+ratatui = ["dep:ratatui-core", "ratatui-core/underline-color"]
+
+[dependencies]
+ratatui-core = { version = "0.1", optional = true }
+unicode-segmentation = "1.12"
+unicode-width = "0.2"
+
+[dev-dependencies]
+proptest = "1"
+
+[workspace.lints.rust]
+warnings = "deny"
+elided_lifetimes_in_paths = "deny"
+missing_debug_implementations = "deny"
+missing_docs = "deny"
+unexpected_cfgs = "deny"
+unsafe_code = "deny"
+unused_crate_dependencies = "deny"
+unused_lifetimes = "deny"
+unused_qualifications = "deny"
+
+# House policy: a discard is a defect only where `#[must_use]` declares an
+# obligation, which `warnings` enforces through `unused_must_use`.
+unused_results = "allow"
+
+# House policy: Unicode identifier appearance is not a human-legibility gate.
+confusable_idents = "allow"
+mixed_script_confusables = "allow"
+uncommon_codepoints = "allow"
+
+[workspace.lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -2 }
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -3 }
+
+# House policy: line and parameter counts are not complexity measures.
+too_many_arguments = "allow"
+too_many_lines = "allow"
+
+# House policy: lexical appearance is not structural correctness.
+disallowed_names = "allow"
+enum_variant_names = "allow"
+similar_names = "allow"
+struct_field_names = "allow"
+upper_case_acronyms = "allow"
+
+# House policy: source linting cannot adjudicate transitive convergence.
+multiple_crate_versions = "allow"
+
+# House policy: `#[must_use]` declares an obligation; blanket annotation
+# erases the signal.
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+
+dbg_macro = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+allow_attributes_without_reason = "deny"
+
+[workspace.metadata.rust-starter]
+format_command = ["cargo", "fmt", "--all", "--check"]
+clippy_command = [
+  "cargo",
+  "clippy",
+  "--workspace",
+  "--all-targets",
+  "--all-features",
+]
+# Without `--all-targets`, `cargo test` also runs the doctests, which carry the
+# crate's usage example.
+test_command = ["cargo", "test", "--workspace", "--all-features"]
+doc_command = ["cargo", "doc", "--workspace", "--all-features", "--no-deps"]
+canonicalize_commands = [
+  [
+    "cargo",
+    "fix",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--allow-dirty",
+    "--allow-staged",
+    "--allow-no-vcs",
+  ],
+  [
+    "cargo",
+    "clippy",
+    "--fix",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--allow-dirty",
+    "--allow-staged",
+    "--allow-no-vcs",
+  ],
+  ["cargo", "fmt", "--all"],
+]
+
+[workspace.metadata.rust-starter.source_files]
+max_lines = 3000
+include = ["*.rs", "**/*.rs"]
+exclude = []

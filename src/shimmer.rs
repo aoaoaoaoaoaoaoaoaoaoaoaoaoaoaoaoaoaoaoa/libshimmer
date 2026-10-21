@@ -1,0 +1,256 @@
+//! A recipe's shader running on its own stage and clock, and the commands a host gives it.
+
+use std::fmt;
+use std::marker::PhantomData;
+use std::time::Duration;
+
+use crate::gauge::{Gauge, Wide};
+use crate::paint::{Ink, Motion, Palette, Row};
+use crate::recipe::{Glyphs, Recipe, Unfit};
+use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
+use crate::{STALE, TICK};
+
+/// Quanta a second at [`Intensity::BRISK`].
+pub(crate) const QUANTA: f64 = 100.0;
+
+/// What the host is doing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Spell {
+    /// Between bouts.
+    #[default]
+    Idle,
+    /// Producing.
+    Busy,
+    /// Blocked on something external.
+    Wait,
+}
+
+/// How hard the host works, measuring whatever the host chooses: at least 0, where
+/// [`Intensity::BRISK`] is the most a stage shows linearly.
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub struct Intensity(f64);
+
+impl Intensity {
+    /// Brisk work, which a shimmer counts as 100 quanta a second.
+    pub const BRISK: Self = Self(1.0);
+
+    /// `level`, saturated: NaN and negative levels read as zero, and infinity as the greatest
+    /// finite level.
+    pub fn new(level: f64) -> Self {
+        Self(if level > 0.0 {
+            level.min(f64::MAX)
+        } else {
+            0.0
+        })
+    }
+
+    /// The level, finite and at least 0.
+    pub fn level(self) -> f64 {
+        self.0
+    }
+
+    /// Quanta a second: [`QUANTA`] for each unit up to brisk, and logarithmic beyond, so that a
+    /// surge quickens the stage without swamping it.
+    fn pace(self) -> f64 {
+        QUANTA
+            * if self.0 <= 1.0 {
+                self.0
+            } else {
+                1.0 + self.0.ln()
+            }
+    }
+}
+
+/// One recipe's shader running on its own stage and clock: what a host holds. `Shimmer` alone is
+/// `Shimmer<Wide>`.
+pub struct Shimmer<G: Gauge = Wide> {
+    recipe: &'static Recipe,
+    shader: Box<dyn Shader>,
+    stage: Stage,
+    clock: Clock,
+    gauge: PhantomData<G>,
+}
+
+impl<G: Gauge> Shimmer<G> {
+    /// A shimmer of `recipe`, whose randomness `seed` determines, idle and with an empty caption.
+    ///
+    /// # Errors
+    ///
+    /// [`Unfit`] when the terminal lacks glyphs the recipe needs, or when the gauge is wide and the
+    /// recipe paints only narrow graphemes.
+    pub fn new(recipe: &'static Recipe, seed: u64, glyphs: Glyphs) -> Result<Self, Unfit> {
+        recipe.fits::<G>(glyphs)?;
+        Ok(Self {
+            recipe,
+            shader: (recipe.summon)(seed),
+            stage: Stage::default(),
+            clock: Clock::default(),
+            gauge: PhantomData,
+        })
+    }
+
+    /// The recipe this shimmer runs.
+    pub fn recipe(&self) -> &'static Recipe {
+        self.recipe
+    }
+
+    /// Dresses `caption`, restarting its age when it changes.
+    pub fn show(&mut self, caption: G::Caption<'_>) {
+        self.stage.show(caption.as_ref());
+    }
+
+    /// Casts `spell`, restarting its age when it changes. Entering [`Spell::Idle`] ends the bout.
+    pub fn set_spell(&mut self, spell: Spell) {
+        if self.stage.cast(spell) && spell == Spell::Idle {
+            self.shader.idle(&self.stage);
+        }
+    }
+
+    /// Sets how hard the host works.
+    pub fn set_intensity(&mut self, intensity: Intensity) {
+        self.stage.intensity = intensity;
+    }
+
+    /// Runs the whole ticks that `dt` completes, carrying the remainder to the next call. A gap
+    /// longer than [`STALE`] runs one tick and drops the remainders.
+    pub fn advance(&mut self, dt: Duration) {
+        for _ in 0..self.clock.due(dt) {
+            let quanta = self.clock.quanta(self.stage.intensity);
+            self.stage.advance(quanta);
+            self.shader.tick(&self.stage);
+        }
+    }
+
+    /// Paints the status line's lead and backdrop. A still mark is absent, and still letters are
+    /// the caption verbatim, without styling, tail, or backdrop.
+    pub fn status(&self, palette: Palette, motion: Motion) -> Row {
+        let mut canvas = Canvas {
+            letters: vec![Ink::default(); self.stage.caption.len()],
+            ..Canvas::default()
+        };
+        self.shader.status(&self.stage, palette, &mut canvas);
+        Row::paint(&self.stage.caption, canvas, motion)
+    }
+
+    /// Paints the bullet in front of a running sub-task, one cell wide.
+    pub fn bullet(&self, palette: Palette) -> Ink {
+        self.shader.bullet(&self.stage, palette)
+    }
+}
+
+impl<G: Gauge> fmt::Debug for Shimmer<G> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Shimmer")
+            .field("recipe", &self.recipe.name)
+            .field("spell", &self.stage.spell)
+            .field("t", &self.stage.t)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Converts the host's Δt into whole ticks, and intensity into whole quanta.
+#[derive(Default)]
+struct Clock {
+    /// Time short of a whole tick.
+    owed: Duration,
+    /// Quanta short of a whole one.
+    carry: f64,
+}
+
+impl Clock {
+    /// The ticks due after `dt`.
+    fn due(&mut self, dt: Duration) -> u32 {
+        if dt > STALE {
+            *self = Self::default();
+            return 1;
+        }
+        self.owed += dt;
+        let mut due = 0;
+        while self.owed >= TICK {
+            self.owed -= TICK;
+            due += 1;
+        }
+        due
+    }
+
+    /// The whole quanta that one tick at `intensity` completes.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "The carry is finite and nonnegative, and logarithmic pacing holds one tick's quanta below 3000."
+    )]
+    fn quanta(&mut self, intensity: Intensity) -> u32 {
+        self.carry += intensity.pace() * TICK_SECS;
+        let whole = self.carry.floor();
+        self.carry -= whole;
+        whole as u32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Spell::{Busy, Idle, Wait};
+    use crate::paint::Rgb;
+
+    const PALETTE: Palette = Palette {
+        fg: Rgb(208.0, 208.0, 208.0),
+        bg: Rgb(21.0, 21.0, 21.0),
+    };
+
+    /// Counts the bouts it was told ended, and shows the count as its bullet.
+    #[derive(Default)]
+    struct Recorder {
+        ended: u32,
+    }
+
+    impl Shader for Recorder {
+        fn idle(&mut self, _stage: &Stage) {
+            self.ended += 1;
+        }
+
+        fn status(&self, _stage: &Stage, _palette: Palette, _canvas: &mut Canvas) {}
+
+        fn bullet(&self, _stage: &Stage, _palette: Palette) -> Ink {
+            Ink::of(char::from_digit(self.ended, 10).unwrap())
+        }
+    }
+
+    static RECORDER: Recipe = Recipe {
+        name: "Recorder",
+        blurb: "",
+        credit: "",
+        needs: Glyphs::BASE,
+        wide: true,
+        summon: |_| Box::<Recorder>::default(),
+    };
+
+    #[test]
+    fn each_entry_into_idle_ends_one_bout() {
+        let mut shimmer: Shimmer = Shimmer::new(&RECORDER, 0, Glyphs::BASE).unwrap();
+        let script = [
+            (Idle, '0'),
+            (Busy, '0'),
+            (Wait, '0'),
+            (Idle, '1'),
+            (Idle, '1'),
+            (Wait, '1'),
+            (Busy, '1'),
+            (Idle, '2'),
+        ];
+        for (spell, ended) in script {
+            shimmer.set_spell(spell);
+            shimmer.advance(STALE);
+            assert_eq!(shimmer.bullet(PALETTE).glyph, Some(ended), "{spell:?}");
+        }
+    }
+
+    #[test]
+    fn a_stale_gap_runs_one_tick() {
+        let mut clock = Clock::default();
+        assert_eq!(clock.due(TICK / 2), 0);
+        assert_eq!(clock.due(STALE + Duration::from_nanos(1)), 1);
+        assert_eq!(clock.due(TICK / 2), 0, "a stale gap drops the time owed");
+        assert_eq!(clock.due(STALE), 31);
+    }
+}

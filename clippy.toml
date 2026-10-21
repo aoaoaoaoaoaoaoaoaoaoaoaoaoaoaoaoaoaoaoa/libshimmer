@@ -1,0 +1,22 @@
+# Keep this file tiny. Do not move the repo-wide allow/deny architecture here.
+
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+allow-panic-in-tests = true
+
+# libshimmer reads no clock or environment, spawns no thread, and draws no
+# unseeded randomness.
+disallowed-methods = [
+  "std::env::args",
+  "std::env::var",
+  "std::env::var_os",
+  "std::env::vars",
+  "std::thread::spawn",
+  "std::time::Instant::now",
+  "std::time::SystemTime::now",
+]
+disallowed-types = [
+  "std::collections::HashMap",
+  "std::collections::HashSet",
+  "std::collections::hash_map::RandomState",
+]
