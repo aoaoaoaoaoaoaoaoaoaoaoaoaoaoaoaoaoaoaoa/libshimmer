@@ -35,11 +35,6 @@
 //! # Ok::<(), libshimmer::Unfit>(())
 //! ```
 
-#![allow(
-    dead_code,
-    reason = "Stock shaders awaiting their ports use the rest of the kit, stage, and paint; removed once every port lands."
-)]
-
 use std::time::Duration;
 
 mod gauge;
