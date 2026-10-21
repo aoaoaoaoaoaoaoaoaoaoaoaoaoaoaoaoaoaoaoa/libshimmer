@@ -18,6 +18,9 @@ include = ["/src", "/README.md", "/LICENSE"]
 [lints]
 workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 ratatui = ["dep:ratatui-core", "ratatui-core/underline-color"]
 
