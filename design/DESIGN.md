@@ -1,6 +1,6 @@
 # libshimmer design
 
-Draft 3, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 3 records the owner's answers to D4, D11, D15, and D16, and proposes one fallible loader for D14 and D18.
+Draft 4, 2026-10-20. Moving codex-tui's shimmers into a crate that any terminal UI can use. Draft 4 records the owner's choice of the fallible loader for D14 and D18, marks the owner's decisions as decided, and records which stock recipes paint wide graphemes.
 
 <!-- digest -->
 
@@ -327,7 +327,7 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P8 | With still letters, the lead is the caption verbatim, without styling, tail, or backdrop; a still mark is absent. | holds | test across `ROSTER` |
 | P9 | No caption, intensity, or Δt causes a panic. | unverified | `Intensity::new` saturates; property test |
 | P10 | Ticks never read colors; colors exist only at paint. | broken by critter's tint | by construction: the stage holds no palette |
-| P11 | Apart from D6, D9, D10, and any recipe D18 withholds, codex-tui's shimmers paint as before the extraction. | new | the reel's cell export of one scripted take per recipe, compared before and after |
+| P11 | Apart from D6, D9, D10, and D18's width guard, codex-tui's shimmers paint as before the extraction. | new | the reel's cell export of one scripted take per recipe, compared before and after |
 | P12 | Each noun in §4 has one name throughout libshimmer and the fork-owned code of its hosts: no name it replaces survives there. | new | `rg` for each replaced name after the extraction |
 | P13 | A recipe paints only the base glyphs and the repertoires it declares. | new | test across `ROSTER` on every glyph of the reel's scripted take |
 
@@ -344,7 +344,7 @@ The reel already flattens paint into cells, and codex-tui and memview both build
 
 **D3 Time.** [S] The host passes Δt; libshimmer owns the fixed-step accumulator and the stale cutoff. Reading the wall clock would break P1 to P4, and the picker, the reel, and tests all run on time that is not the wall's.
 
-**D4 Work signal.** [S] The owner chose (a) on 2026-10-20.
+**D4 Work signal.** [X] The owner chose (a) on 2026-10-20.
 
 - [x] (a) A sticky `Intensity` beside `Spell`.
 - [ ] (b) The host pushes whole quanta.
@@ -374,7 +374,7 @@ Busy, waiting, and between bouts are exclusive states, so they belong to one enu
 
 **D10 Palette.** [D] Colors arrive only at paint. Critter, which smooths a color in `tick` today, smooths blend weights instead. This keeps P10, and codex-tui loses its `Engaged` state, which exists only to wait for colors before constructing an engine.
 
-**D11 Names.** [S] `Engine` becomes `Shimmer`, the trait `Shimmer` becomes `Shader`, the header becomes the caption, and paced tokens become quanta, because the type a host holds should carry the library's name, and a token is a language model's unit. The owner agreed on 2026-10-20, provided the renaming is consistent: each noun in §4 keeps one name throughout libshimmer and the fork-owned code of its hosts (P12). Upstream-owned codex-tui files keep upstream's names, such as the status indicator's `header`, because the fork changes upstream files only at seams; the seam is where a header becomes a caption.
+**D11 Names.** [X] `Engine` becomes `Shimmer`, the trait `Shimmer` becomes `Shader`, the header becomes the caption, and paced tokens become quanta, because the type a host holds should carry the library's name, and a token is a language model's unit. The owner agreed on 2026-10-20, provided the renaming is consistent: each noun in §4 keeps one name throughout libshimmer and the fork-owned code of its hosts (P12). Upstream-owned codex-tui files keep upstream's names, such as the status indicator's `header`, because the fork changes upstream files only at seams; the seam is where a header becomes a caption.
 
 **D12 Painting while idle.** [D]
 
@@ -386,7 +386,7 @@ Every shader already does (a), because `stage.busy()` is false. codex-tui never 
 
 **D13 Line width.** [D] The host does not pass the line's width. The only bound today is a test that holds backdrops to 80 columns, and the host clips the rest; a width input waits for a host that needs one.
 
-**D14 Terminal features.** [O] Phyllotaxis and tetromino paint Unicode 16's octants, which a terminal without them shows as missing-glyph boxes, and no terminal query reports which glyphs a terminal draws.
+**D14 Terminal features.** [X] The owner chose (a) on 2026-10-20. Phyllotaxis and tetromino paint Unicode 16's octants, which a terminal without them shows as missing-glyph boxes, and no terminal query reports which glyphs a terminal draws.
 
 - [x] (a) A fallible loader. Each recipe declares the glyph repertoires it needs beyond a base set every target terminal draws; the host passes those its terminal draws as `Glyphs`; `Shimmer::new` returns `Unfit`, naming what is missing, and `Recipe::fits` answers the same question without constructing, so a picker can withhold the recipe.
 - [ ] (b) Fallback paint: a recipe that needs a repertoire also paints without it, octants degrading to quadrants, and the host's `Glyphs` selects the rendition.
@@ -394,12 +394,12 @@ Every shader already does (a), because `stage.busy()` is false. codex-tui never 
 
 Terminals report their identity (XTVERSION) and cursor position, but a missing-glyph box usually advances the cursor as far as an octant does, so no probe at run time can tell, and P1 forbids libshimmer one anyway. The host takes its `Glyphs` from configuration, the user, or its own table of known terminals. The probe moves before the extraction and widens: print every glyph the stock recipes paint in each target terminal; what renders everywhere becomes the base set, and the rest become declared repertoires (P13). (b) can later serve a recipe worth keeping on terminals that lack a repertoire, without changing (a)'s API.
 
-**D15 Distribution.** [S] The owner chose (a) on 2026-10-20: `libshimmer` on crates.io, published from a public GitHub repository. The name was unclaimed on crates.io that day.
+**D15 Distribution.** [X] The owner chose (a) on 2026-10-20: `libshimmer` on crates.io, published from a public GitHub repository. The name was unclaimed on crates.io that day.
 
 - [x] (a) crates.io, from which any host, and every machine that builds codex-1337, fetches without credentials.
 - [ ] (b) A private git dependency, which every such machine must be able to fetch.
 
-**D16 Second host.** [S] The owner chose (a) on 2026-10-20.
+**D16 Second host.** [X] The owner chose (a) on 2026-10-20.
 
 - [x] (a) memview, a second ratatui 0.30.2 host, adopts libshimmer in the first release.
 - [ ] (b) codex-tui is the only host at first.
@@ -413,13 +413,13 @@ A boundary drawn from one host is untested, and a second host exposes what is sp
 
 (a) gives the concept one owner.
 
-**D18 Wide graphemes.** [O] A caption may hold graphemes two cells wide, such as CJK and most emoji. A shader that lays one letter per cell, or puts a one-cell glyph in place of a wide letter, misplaces the timer that follows the lead.
+**D18 Wide graphemes.** [X] The owner chose (a) on 2026-10-20. A caption may hold graphemes two cells wide, such as CJK and most emoji. A shader that lays one letter per cell, or puts a one-cell glyph in place of a wide letter, misplaces the timer that follows the lead.
 
 - [x] (a) A gauge as a type. Each recipe declares whether it paints wide graphemes well, and a host fixes its gauge in the type it holds: `Shimmer`, short for `Shimmer<Wide>`, takes any caption and loads only recipes that paint wide graphemes; `Shimmer<Narrow>` loads recipes of both kinds and takes only a `NarrowStr`, text the host has checked. `Shimmer::new` and `Recipe::fits` check the gauge with D14's glyphs.
 - [ ] (b) The same declaration, checked at run time: `show` refuses a wide grapheme sent to a recipe that paints only narrow ones.
 - [ ] (c) Every recipe paints wide graphemes.
 
-Either way, paint refuses a substitute glyph whose width differs from the grapheme it replaces, so P7 holds for every recipe, and the declaration states where a recipe looks right, not whether the timer moves. (a) costs a host that shows any text nothing, and makes an unchecked caption sent to a narrow shimmer a compile error; (b) finds that mistake at the first wide caption; (c) bans grid shaders by fiat. The reel settles which stock recipes paint wide graphemes well: one take per recipe with a caption mixing narrow and wide graphemes, reviewed.
+Either way, paint refuses a substitute glyph whose width differs from the grapheme it replaces, so P7 holds for every recipe, and the declaration states where a recipe looks right, not whether the timer moves. (a) costs a host that shows any text nothing, and makes an unchecked caption sent to a narrow shimmer a compile error; (b) finds that mistake at the first wide caption; (c) bans grid shaders by fiat. An audit of the 17 stock recipes found that all paint wide graphemes well under the guard, so all declare wide. Fourteen only color their letters; tectonic also inserts a fault cell between graphemes, which P7 counts and an existing test checks against a caption holding CJK and emoji. Lfsr substitutes bits only for one-cell letters, but it marks any tapped blank with `·`, including the two-cell ideographic space. Critter's sneeze and forge's steam substitute glyphs regardless of width, so today a wide caption moves the timer while either plays; the guard leaves such letters unsubstituted. One reel take per recipe, with a caption mixing narrow and wide graphemes, checks the guard and the declarations.
 
 ## Appendix: API sketch and usage
 
