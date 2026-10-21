@@ -42,7 +42,7 @@ fn symbols(row: &Row) -> Vec<&str> {
     row.cells().map(|(symbol, _)| symbol).collect()
 }
 
-/// Checks P7, P8 and P13 on everything `shimmer` paints now.
+/// Checks P7, P8 and P11 on everything `shimmer` paints now.
 fn inspect(shimmer: &Shimmer, caption: &str) {
     let recipe = shimmer.recipe();
     let name = recipe.name();
@@ -85,7 +85,7 @@ fn inspect(shimmer: &Shimmer, caption: &str) {
     }
 }
 
-/// P7, P8 and P13 across the roster, through one take of the script with its own captions, one
+/// P7, P8 and P11 across the roster, through one take of the script with its own captions, one
 /// with a caption mixing narrow and wide graphemes, and a while idle.
 #[test]
 fn every_recipe_keeps_its_promises_through_the_script() {

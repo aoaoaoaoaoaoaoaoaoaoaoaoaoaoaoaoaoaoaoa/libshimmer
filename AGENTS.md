@@ -1,4 +1,4 @@
-libshimmer: animated status lines for terminal UIs; `design/DESIGN.md` holds the adopted design
+libshimmer: animated status lines for terminal UIs; `SPEC.md` owns the design
 
 ## gate
 - `./check.py check` after edits; `./check.py verify` runs same gate without writes

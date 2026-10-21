@@ -1,0 +1,306 @@
+# libshimmer specification
+
+| § | Chapter | Question |
+|---|---|---|
+| 1 | Synopsis | What is libshimmer, and how does it work? |
+| 2 | Boundary | What does libshimmer own, and what crosses its edge? |
+| 3 | Nouns | Which types exist, and how do they relate? |
+| 4 | Lifecycle | Which states does a shimmer pass through? |
+| 5 | Protocol | What does a host do each frame? |
+| 6 | Promises | What always holds? |
+
+## 1 Synopsis
+
+libshimmer animates the status line of a terminal program in step with the program's work. A program that uses it is a **Host**, such as codex-tui, the terminal interface of the codex coding agent, or memview.
+
+A **Shimmer** is one running animation. It dresses a **Caption**, the status line's text, such as "Working", and paints the line's **Lead**: a **Mark** of glyphs before the caption, the caption's **Letters**, and a **Tail** of cells after them. Beneath the line it lays a **Backdrop** of background colors. The paint of one cell is an **Ink**, and the paint of the lead and the backdrop together is a **Row**. A shimmer also paints a **Bullet**, the one-cell glyph in front of a running sub-task, such as a tool call.
+
+A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructor for the recipe's **Shader**, the animation itself. The **ROSTER** lists the 17 stock recipes, such as Lava Lamp, in the order a picker shows them; hosts cannot add recipes of their own. The host chooses the recipe, through a picker or otherwise, and seeds the shimmer's randomness.
+
+The host tells the shimmer what it is doing. The **Spell** is `Busy` while the host produces, `Wait` while it is blocked on something external, and `Idle` otherwise; a **Bout** is a stretch of `Busy` and `Wait` between two `Idle`s, such as one turn of the codex agent. The **Intensity** is how hard the host works: a number of at least 0, where 1.0 is brisk, measuring whatever the host chooses. libshimmer converts intensity into whole units of paced work, each a **Quantum**. A host that learns of work in lumps, such as a burst of tokens, can pour them into a **Reservoir**, which drains each lump over four seconds. The **Script** is a canned bout that plays in a loop, with which a picker previews a recipe.
+
+A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once.
+
+To draw a frame, the host asks the shimmer for its row, passing its **Palette**, the terminal's default foreground and background colors, and its **Motion**, which says whether the mark and the letters may move. Painting changes nothing, and the paint depends only on the recipe, the seed, the commands so far, the palette, and the motion. The host lays the lead beside its own text, such as codex-tui's timer, and shades the line with the backdrop. A row is plain data; an optional feature converts it into ratatui spans and shades a ratatui buffer.
+
+Two facts about a host limit which recipes it can run: the glyphs its terminal draws, and whether its captions hold wide graphemes. Some recipes paint glyphs beyond a base set that every target terminal draws; the only such repertoire is Unicode 16's octants, and the host states, as **Glyphs**, the repertoires its terminal draws. CJK characters and most emoji are two cells wide, and the host fixes a **Gauge** in the shimmer's type: `Wide` takes any caption, and `Narrow` takes only a **NarrowStr**, text the host has checked to hold no wide grapheme. Each recipe declares the repertoires it needs and whether it paints wide graphemes well. Making a shimmer from a recipe that does not fit the host yields **Unfit** instead, naming what is missing, and a picker can ask beforehand and withhold such a recipe.
+
+The host keeps terminal input and output; frame scheduling; the status line's layout; measuring work; detecting the terminal's colors, color depth, and glyphs; the picker; and the user's choice. libshimmer never calls out.
+
+## 2 Boundary
+
+```mermaid
+flowchart TB
+  classDef subject fill:#e8f1fb,stroke:#0b5cad,stroke-width:1.5px,color:#111
+  classDef host fill:#fff,stroke:#333,color:#111
+  classDef outside fill:#f3f3f3,stroke:#888,color:#333
+  classDef dep fill:#fff,stroke:#888,color:#555,stroke-dasharray:4 3
+
+  work["<b>Work source</b><br/>codex-tui: the app server"]:::outside
+  host["<b>Host TUI</b><br/>codex-tui, memview, …<br/>owns the terminal, frame loop,<br/>layout, work measurement,<br/>colors, motion, the choice"]:::host
+  term["<b>Terminal</b>"]:::outside
+  lib["<b>libshimmer</b><br/>owns the catalog, each<br/>shimmer's stage and clock,<br/>pacing, paint"]:::subject
+  core["ratatui-core"]:::dep
+  uni["unicode-segmentation,<br/>unicode-width"]:::dep
+
+  work -->|"turn, tool, usage events"| host
+  host -->|frames| term
+  host -->|"recipe, seed, glyphs,<br/>caption, spell, intensity,<br/>Δt, palette, motion"| lib
+  lib -->|"paint: Row, Ink<br/>catalog: ROSTER<br/>refusal: Unfit"| host
+  lib -.->|"feature ratatui"| core
+  lib -.-> uni
+```
+
+Blue: libshimmer. White: the host. Grey: outside both. Dashed: a Cargo dependency. A solid arrow carries the data on its label in its direction. The host initiates every exchange; libshimmer never calls out.
+
+| Concern | Owner | Crossing |
+|---|---|---|
+| terminal, frame loop, redraw requests | host | `TICK` advises the frame interval |
+| wall time | host | `advance(Δt)` |
+| shimmer time: fixed ticks, skipped gaps | libshimmer | none |
+| measuring work | host | `set_intensity`, `set_spell` |
+| converting intensity into quanta | libshimmer | none |
+| caption | host | `show` |
+| terminal colors and the truecolor check | host | `Palette`, at paint |
+| reduced motion | host | `Motion`, at paint |
+| status-line layout and clipping | host | `Row` |
+| shimmer choice, persistence, picker | host | `ROSTER`, `Recipe`, `script` |
+| randomness | libshimmer, seeded by the host | `seed` |
+| stock catalog | libshimmer | `ROSTER` |
+| glyphs the terminal draws | host | `Glyphs`, at `Shimmer::new` |
+| whether captions hold wide graphemes | host | the gauge, a type parameter |
+| what each recipe needs | libshimmer | `Recipe::fits`, `Unfit` |
+
+The host passes Δt, and libshimmer owns the fixed-step accumulator and the stale cutoff: reading the wall clock would break P1 to P4, and pickers, reels, and tests run on time that is not the wall's. A row is plain data (`Row`, `Ink`, `Rgb`), so that a host on any toolkit can draw it; the `ratatui` feature builds on `ratatui-core`, the crate ratatui designates for widget libraries. The status line's width does not cross: the backdrop holds at most 80 columns, and the host clips the rest. The status timer does not cross either; a host without one need not invent it.
+
+The catalog is closed: `Shader`, `Stage`, and the shaders' shared kit are crate-private. Opening them later is a minor release, and closing them a major one; an open `Shader` would freeze the stage's members.
+
+No terminal query reports which glyphs a terminal draws: terminals report their identity and cursor position, but a missing-glyph box usually advances the cursor as far as the glyph would, and P1 forbids libshimmer a probe anyway. The host takes its `Glyphs` from configuration, the user, or its own table of known terminals. `Glyphs::octant` names the octant repertoire's glyphs, so that a host or tool can print or draw them.
+
+libshimmer is published on crates.io from a public GitHub repository, so that any host, and every machine that builds one, fetches it without credentials.
+
+## 3 Nouns
+
+```mermaid
+classDiagram
+  direction LR
+  class Shimmer~G~ {
+    +new(recipe, seed, glyphs) Result
+    +show(caption: G::Caption)
+    +set_spell(spell)
+    +set_intensity(intensity)
+    +advance(dt)
+    +status(palette, motion) Row
+    +bullet(palette) Ink
+  }
+  class Gauge {
+    <<sealed trait>>
+    Narrow, captions as NarrowStr
+    Wide, captions as str
+  }
+  class Recipe {
+    +needs() Glyphs
+    +wide() bool
+    +fits(glyphs) Result
+  }
+  class ROSTER {
+    <<static>>
+  }
+  class Glyphs {
+    <<set>>
+    BASE
+    OCTANTS
+  }
+  class Spell {
+    <<enumeration>>
+    Idle
+    Busy
+    Wait
+  }
+  class Intensity {
+    <<f64 at least 0>>
+  }
+  class Row {
+    +cells() symbols and inks
+    +backdrop() colors
+  }
+  class Ink
+  Shimmer --> "1" Recipe
+  Shimmer ..> Gauge : typed by
+  Shimmer ..> Spell : takes
+  Shimmer ..> Intensity : takes
+  Shimmer ..> Row : paints
+  ROSTER "1" *-- "17" Recipe
+  Recipe ..> Glyphs : needs
+  Row "1" *-- "*" Ink
+  style Shimmer fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Gauge fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Recipe fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style ROSTER fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Glyphs fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Spell fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Intensity fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Row fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Ink fill:#e8f1fb,stroke:#0b5cad,color:#111
+```
+
+Blue: public, members marked `+`. Filled diamond: owns, with multiplicities; arrow: refers to; dashed arrow: uses. `Palette`, `Motion`, `NarrowStr`, `Unfit`, `Reservoir`, and the script appear in the glossary only.
+
+```mermaid
+classDiagram
+  direction LR
+  class Shimmer
+  class Recipe
+  class Row
+  class Clock {
+    ~owed
+    ~carry
+    ~due(dt) u32
+    ~quanta(intensity) u32
+  }
+  class Stage {
+    ~t
+    ~spell
+    ~intensity
+    ~quanta
+    ~caption
+    ~flow(window) f64
+  }
+  class Shader {
+    <<trait>>
+    ~tick(stage)
+    ~idle(stage)
+    ~status(stage, palette, canvas)
+    ~bullet(stage, palette) Ink
+  }
+  class Canvas {
+    ~mark
+    ~letters
+    ~tail
+    ~backdrop
+  }
+  class LavaLamp
+  Shimmer "1" *-- "1" Clock
+  Shimmer "1" *-- "1" Stage
+  Shimmer "1" *-- "1" Shader
+  Recipe ..> Shader : summons
+  LavaLamp ..|> Shader
+  Shader ..> Stage : reads
+  Shader ..> Canvas : paints
+  Shimmer ..> Row : turns the canvas into
+  style Shimmer fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Recipe fill:#e8f1fb,stroke:#0b5cad,color:#111
+  style Row fill:#e8f1fb,stroke:#0b5cad,color:#111
+```
+
+The crate-private types inside a shimmer are white, with members marked `~`; blue types repeat from the view above. Dashed arrow with hollow triangle: implements. `LavaLamp` stands for all 17 stock shaders. A shader paints a canvas, and the shimmer turns it into a row, applying the motion and refusing any glyph that is not as wide as the text it stands for.
+
+| Term | Meaning |
+|---|---|
+| Host | A terminal program that uses libshimmer |
+| Shimmer | One recipe's shader running on its stage and clock; what a host holds |
+| Shader | The animation: reads the stage each tick and paints a row |
+| Recipe | Catalog entry: name, blurb, credit, the glyphs and gauge it needs, and a constructor for its shader |
+| ROSTER | The stock recipes, in picker order |
+| Glyphs | A set of glyph repertoires beyond the base set every target terminal draws: those a terminal draws, or those a recipe needs; only octants so far |
+| Gauge | The widest grapheme a shimmer's captions may hold, fixed by the host as a type parameter: `Narrow`, one cell, or `Wide`, two |
+| NarrowStr | Text checked to hold no grapheme wider than one cell; the caption of a narrow shimmer |
+| Unfit | Why a recipe cannot load for a host: glyphs the terminal lacks, or captions wider than the recipe paints well |
+| Stage | What a shader reads each tick, as a GPU shader reads uniforms |
+| Tick | One 32 ms step of shimmer time |
+| Clock | Converts the host's Δt into whole ticks, and intensity into whole quanta; a gap longer than `STALE` yields one tick |
+| Spell | `Busy`: producing; `Wait`: blocked on something external; `Idle`: no bout |
+| Bout | A stretch of `Busy` and `Wait` between two `Idle`s |
+| Intensity | How hard the host works: at least 0, where 1.0 is brisk, the most the stage shows linearly |
+| Quantum | One whole unit of paced work, as the stage counts it: 100 a second at brisk intensity, logarithmically more beyond |
+| Reservoir | Turns lumps of work into a flow, draining each over 4 s |
+| Caption | The text a shimmer dresses |
+| Lead | The part of the status line a shimmer paints: mark, letters, and tail |
+| Mark | Cells of glyphs before the caption, then a space; absent when the mark may not move |
+| Letters | The caption's graphemes as painted, one ink each; a glyph may stand in for a letter as wide |
+| Tail | Cells between the letters and the host's text, such as the timer |
+| Backdrop | Background colors laid under the line from its first column, whatever text lands there; at most 80 columns |
+| Palette | The terminal's default foreground and background |
+| Motion | Whether the mark and the letters may move |
+| Row | The lead as painted, and the backdrop beneath it |
+| Ink | The paint of one cell |
+| Bullet | The one-cell glyph in front of a running sub-task, such as a tool call |
+| Script | A looping canned bout that previews a recipe |
+
+Intensity is one sticky number beside the spell. libshimmer knows only its value and its normalization: the host decides what it measures, and each shader how it shows it. A later intensity may carry up to three independent channels, each with a canonical projection onto fewer, so that a one-channel shader runs under any host. A host that learns of work in lumps pours them into a reservoir, the one owner of the drain time, and converts the flow into intensity by its own measure; the script drains its lumps the same way.
+
+The gauge is a type, so that an unchecked caption sent to a narrow shimmer is a compile error and a host that shows any text pays nothing. Every stock recipe paints wide graphemes well, because paint refuses a substitute glyph whose width differs from the text it replaces: a recipe's declaration states where it looks right, not whether the host's text moves.
+
+## 4 Lifecycle
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> Idle: new(recipe, seed, glyphs)
+  Idle --> Busy: set_spell(Busy)
+  Idle --> Wait: set_spell(Wait)
+  state Bout {
+    Busy --> Wait: set_spell(Wait)
+    Wait --> Busy: set_spell(Busy)
+  }
+  Bout --> Idle: set_spell(Idle) / idle
+  note left of Idle
+    Any state, no transition:
+    show(caption)
+    set_intensity(i)
+    advance(Δt)
+  end note
+```
+
+Transitions read `command / effect`, and `idle` goes to the shader. Setting the current spell again is not a transition. The note's commands change data, not state: a changed caption restarts its age, and `advance` runs the ticks the clock owes. A recipe that does not fit the host yields `Unfit` instead of a shimmer. Ticks and paint run in every state, `Idle` included.
+
+Busy, waiting, and between bouts are exclusive states, so they are one enum, and ending a bout is entering `Idle`, which makes a lost or doubled end impossible (P5). There is no reset: clearing the caption is `show("")`, ending a bout is `set_spell(Idle)`, and a fresh shimmer is `Shimmer::new`. Each shader paints `Idle` as it chooses, with an animation of its own or as it paints `Wait`; the stock shaders paint it as `Wait`. A host may hide its status line between bouts, as codex-tui does, or keep it and show the idle paint.
+
+## 5 Protocol
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant W as Work source
+  participant H as Host
+  participant S as Shimmer
+  participant D as Shader
+  H->>S: new(recipe, seed, glyphs)
+  W-)H: bout starts
+  H->>S: set_spell(Busy), show(c), set_intensity(i)
+  loop each frame, every TICK (32 ms), in any spell
+    opt work changed since the last frame
+      H->>S: show, set_spell, set_intensity
+    end
+    H->>S: advance(Δt)
+    loop each whole tick owed
+      S->>S: stage advances one tick
+      S->>D: tick(stage)
+    end
+    H->>S: status(palette, motion)
+    S->>D: status(stage,<br/>palette, canvas)
+    S-->>H: Row
+    Note over H: lays the lead beside its<br/>own spans, shades the backdrop
+  end
+  W-)H: bout ends
+  H->>S: set_spell(Idle)
+  S->>D: idle(stage)
+```
+
+Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop` repeats its contents; `opt` runs them only when its condition holds.
+
+## 6 Promises
+
+| # | Promise | Check |
+|---|---|---|
+| P1 | libshimmer makes no outbound call: it reads no clock or environment, spawns no thread, keeps no global state, and takes no callback. | clippy's disallowed methods and types; review |
+| P2 | Paint is a function of the recipe, the seed, the command sequence, the palette, and the motion. | property test: twin shimmers under one random command sequence paint alike |
+| P3 | A shimmer changes only at whole ticks: `advance(a)` then `advance(b)` equals `advance(a + b)` while `a + b` stays within `STALE`. | property test |
+| P4 | A gap longer than `STALE` (1 s) advances exactly one tick. | unit test |
+| P5 | Each entry into `Idle` calls the shader's `idle` exactly once, when commanded; nothing else calls it. | unit test with a recording shader |
+| P6 | Painting changes nothing: `status` and `bullet` take `&self`. | signature |
+| P7 | The lead spans `len(mark) + (1 if mark) + width(caption) + len(tail)` columns, and the backdrop at most 80. | by construction: paint refuses a substitute of another width; test across `ROSTER` |
+| P8 | With still letters, the lead is the caption verbatim, without styling, tail, or backdrop; a still mark is absent. | test across `ROSTER` |
+| P9 | No caption, intensity, or Δt causes a panic. | `Intensity::new` saturates; property test |
+| P10 | Ticks never read colors; colors exist only at paint. | by construction: the stage holds no palette |
+| P11 | A recipe paints only the base glyphs and the repertoires it declares. | test across `ROSTER` on every glyph of a scripted take |
