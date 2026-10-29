@@ -26,4 +26,4 @@ row.shade(area, buf);
 shimmer.set_spell(Spell::Idle);
 ```
 
-[SPEC.md](SPEC.md) specifies the design. MIT licensed.
+[SPEC.md](SPEC.md) specifies the design. MIT-0 licensed.
