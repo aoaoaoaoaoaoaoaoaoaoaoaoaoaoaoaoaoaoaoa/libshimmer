@@ -2,7 +2,9 @@
 
 Animated status lines for terminal UIs, paced by the host's work.
 
-A host makes a `Shimmer` from one of the stock recipes, tells it what the host is doing and how hard it works, and each frame draws the status line it paints: a mark, the caption's letters, and a tail, over a backdrop of background colors. Paint is plain data; the `ratatui` feature converts it into ratatui spans and shades a ratatui buffer. libshimmer reads no clock and keeps no global state: the host passes the time between frames, and paint depends only on the recipe, the seed, the commands so far, and the colors and motion the host paints with.
+![The stock recipes, each painting its own name through a bout and the rest after it](media/roster.webp)
+
+A host makes a `Shimmer` from one of the stock recipes, tells it what the host is doing and how hard it works, and each frame draws the status line it paints: a mark, the caption's letters, and a tail, over a backdrop of background colors. Paint is plain data; the `ratatui` feature converts it into ratatui 0.30 spans and shades a ratatui buffer. libshimmer reads no clock and keeps no global state: the host passes the time between frames, and paint depends only on the recipe, the seed, the commands so far, and the colors and motion the host paints with.
 
 ```rust
 use std::time::Duration;
