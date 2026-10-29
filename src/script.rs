@@ -1,8 +1,9 @@
-//! The preview script: a canned bout that plays in a loop, with which a picker previews a recipe.
+//! The preview script: a canned bout and the rest after it, playing in a loop, with which a picker
+//! previews a recipe.
 //!
 //! The bout is the design swatches' cycle. The host works under three captions, then waits on a
 //! background terminal, whose output arrives as the wait ends and drains as a [`Reservoir`]
-//! drains it.
+//! drains it. Then it rests, so that the preview shows the recipe between bouts too.
 //!
 //! [`Reservoir`]: crate::Reservoir
 
@@ -19,6 +20,8 @@ enum Work {
     Busy { rate: f64 },
     /// It waits on a terminal, whose output of `lump` units arrives as the wait ends.
     Wait { lump: f64 },
+    /// It rests between bouts.
+    Idle,
 }
 
 struct Segment {
@@ -28,7 +31,7 @@ struct Segment {
     work: Work,
 }
 
-static CYCLE: [Segment; 4] = [
+static CYCLE: [Segment; 5] = [
     Segment {
         caption: "Working",
         length: 2.5,
@@ -48,6 +51,11 @@ static CYCLE: [Segment; 4] = [
         caption: "Waiting for background terminal",
         length: 7.0,
         work: Work::Wait { lump: 600.0 },
+    },
+    Segment {
+        caption: "Finished",
+        length: 3.0,
+        work: Work::Idle,
     },
 ];
 
@@ -84,7 +92,7 @@ fn inflow(t: f64) -> f64 {
     }
     match segment(t).work {
         Work::Busy { rate } => rate + drained,
-        Work::Wait { .. } => drained,
+        Work::Wait { .. } | Work::Idle => drained,
     }
 }
 
@@ -107,6 +115,7 @@ pub fn cue(at: Duration) -> Cue {
         spell: match segment.work {
             Work::Busy { .. } => Spell::Busy,
             Work::Wait { .. } => Spell::Wait,
+            Work::Idle => Spell::Idle,
         },
         caption: segment.caption,
         intensity: Intensity::new(inflow(t) / QUANTA),

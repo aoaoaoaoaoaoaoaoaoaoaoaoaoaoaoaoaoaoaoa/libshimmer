@@ -89,7 +89,7 @@ fn inspect(shimmer: &Shimmer, caption: &str) {
 /// with a caption mixing narrow and wide graphemes, and a while idle.
 #[test]
 fn every_recipe_keeps_its_promises_through_the_script() {
-    for recipe in &stock::ROSTER {
+    for recipe in stock::ROSTER {
         assert!(std::ptr::eq(stock::named(recipe.name()).unwrap(), recipe));
         let mut shimmer: Shimmer = Shimmer::new(recipe, 0x5eed, Glyphs::OCTANTS).unwrap();
         for mixed in [false, true] {

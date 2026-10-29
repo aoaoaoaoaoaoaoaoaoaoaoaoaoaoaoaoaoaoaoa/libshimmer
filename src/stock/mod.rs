@@ -1,11 +1,16 @@
 //! The stock recipes.
 
 mod cambrian;
+mod caterpillar;
 mod critter;
+mod dandelion;
 mod fireflies;
 mod forge;
+mod frost;
+mod komorebi;
 mod lava_lamp;
 mod lfsr;
+mod moth;
 mod neon;
 mod phyllotaxis;
 mod prism;
@@ -17,6 +22,7 @@ mod supernova;
 mod tectonic;
 mod tetromino;
 mod turing;
+mod yo_yo;
 
 use crate::recipe::Recipe;
 
@@ -25,7 +31,7 @@ const DEEPSEEK: &str = "DeepSeek V4.1 Flash 1017";
 const USER: &str = "The User";
 
 /// The stock recipes, in the order a picker shows them.
-pub static ROSTER: [Recipe; 17] = [
+pub static ROSTER: &[Recipe] = &[
     lava_lamp::RECIPE,
     critter::RECIPE,
     rubik::RECIPE,
@@ -43,6 +49,12 @@ pub static ROSTER: [Recipe; 17] = [
     tectonic::RECIPE,
     lfsr::RECIPE,
     cambrian::RECIPE,
+    moth::RECIPE,
+    caterpillar::RECIPE,
+    dandelion::RECIPE,
+    komorebi::RECIPE,
+    frost::RECIPE,
+    yo_yo::RECIPE,
 ];
 
 /// The stock recipe named `name`.

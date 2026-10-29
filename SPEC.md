@@ -15,9 +15,9 @@ libshimmer animates the status line of a terminal program in step with the progr
 
 A **Shimmer** is one running animation. It dresses a **Caption**, the status line's text, such as "Working", and paints the line's **Lead**: a **Mark** of glyphs before the caption, the caption's **Letters**, and a **Tail** of cells after them. Beneath the line it lays a **Backdrop** of background colors. The paint of one cell is an **Ink**, and the paint of the lead and the backdrop together is a **Row**. A shimmer also paints a **Bullet**, the one-cell glyph in front of a running sub-task, such as a tool call.
 
-A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructor for the recipe's **Shader**, the animation itself. The **ROSTER** lists the 17 stock recipes, such as Lava Lamp, in the order a picker shows them; hosts cannot add recipes of their own. The host chooses the recipe, through a picker or otherwise, and seeds the shimmer's randomness.
+A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructor for the recipe's **Shader**, the animation itself. The **ROSTER** lists the stock recipes, such as Lava Lamp, in the order a picker shows them; hosts cannot add recipes of their own. The host chooses the recipe, through a picker or otherwise, and seeds the shimmer's randomness.
 
-The host tells the shimmer what it is doing. The **Spell** is `Busy` while the host produces, `Wait` while it is blocked on something external, and `Idle` otherwise; a **Bout** is a stretch of `Busy` and `Wait` between two `Idle`s, such as one turn of the codex agent. The **Intensity** is how hard the host works: a number of at least 0, where 1.0 is brisk, measuring whatever the host chooses. libshimmer converts intensity into whole units of paced work, each a **Quantum**. A host that learns of work in lumps, such as a burst of tokens, can pour them into a **Reservoir**, which drains each lump over four seconds. The **Script** is a canned bout that plays in a loop, with which a picker previews a recipe.
+The host tells the shimmer what it is doing. The **Spell** is `Busy` while the host produces, `Wait` while it is blocked on something external, and `Idle` otherwise; a **Bout** is a stretch of `Busy` and `Wait` between two `Idle`s, such as one turn of the codex agent. The **Intensity** is how hard the host works: a number of at least 0, where 1.0 is brisk, measuring whatever the host chooses. libshimmer converts intensity into whole units of paced work, each a **Quantum**. A host that learns of work in lumps, such as a burst of tokens, can pour them into a **Reservoir**, which drains each lump over four seconds. The **Script** is a canned bout and the rest after it, playing in a loop, with which a picker previews a recipe.
 
 A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once.
 
@@ -130,7 +130,7 @@ classDiagram
   Shimmer ..> Spell : takes
   Shimmer ..> Intensity : takes
   Shimmer ..> Row : paints
-  ROSTER "1" *-- "17" Recipe
+  ROSTER "1" *-- "*" Recipe
   Recipe ..> Glyphs : needs
   Row "1" *-- "*" Ink
   style Shimmer fill:#e8f1fb,stroke:#0b5cad,color:#111
@@ -193,7 +193,7 @@ classDiagram
   style Row fill:#e8f1fb,stroke:#0b5cad,color:#111
 ```
 
-The crate-private types inside a shimmer are white, with members marked `~`; blue types repeat from the view above. Dashed arrow with hollow triangle: implements. `LavaLamp` stands for all 17 stock shaders. A shader paints a canvas, and the shimmer turns it into a row, applying the motion and refusing any glyph that is not as wide as the text it stands for.
+The crate-private types inside a shimmer are white, with members marked `~`; blue types repeat from the view above. Dashed arrow with hollow triangle: implements. `LavaLamp` stands for every stock shader. A shader paints a canvas, and the shimmer turns it into a row, applying the motion and refusing any glyph that is not as wide as the text it stands for.
 
 | Term | Meaning |
 |---|---|
@@ -225,7 +225,7 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Row | The lead as painted, and the backdrop beneath it |
 | Ink | The paint of one cell |
 | Bullet | The one-cell glyph in front of a running sub-task, such as a tool call |
-| Script | A looping canned bout that previews a recipe |
+| Script | A looping canned bout and rest that previews a recipe |
 
 Intensity is one sticky number beside the spell. libshimmer knows only its value and its normalization: the host decides what it measures, and each shader how it shows it. A later intensity may carry up to three independent channels, each with a canonical projection onto fewer, so that a one-channel shader runs under any host. A host that learns of work in lumps pours them into a reservoir, the one owner of the drain time, and converts the flow into intensity by its own measure; the script drains its lumps the same way.
 

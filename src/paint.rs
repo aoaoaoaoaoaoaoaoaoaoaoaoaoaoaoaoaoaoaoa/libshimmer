@@ -5,7 +5,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use crate::stage::{Canvas, Caption};
 
 /// Columns of backdrop a row keeps.
-const BACKDROP: usize = 80;
+pub(crate) const BACKDROP: usize = 80;
 
 /// A 24-bit color whose channels stay fractional until they reach the terminal.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -20,6 +20,11 @@ impl Rgb {
             mix(self.1, under.1),
             mix(self.2, under.2),
         )
+    }
+
+    /// Relative luminance in [0, 1], by the Rec. 709 weights.
+    pub(crate) fn luma(self) -> f64 {
+        (0.2126 * self.0 + 0.7152 * self.1 + 0.0722 * self.2) / 255.0
     }
 
     /// The channels as a terminal takes them: clamped to `0..=255` and truncated.
@@ -50,6 +55,29 @@ pub struct Palette {
 }
 
 impl Palette {
+    /// `accent` as it reads on this palette: as is on a dark background; on a light one, darkened
+    /// along its own hue to at most 40 % luma, so that a glow reads as ink. Shaders take accents
+    /// through it before blending them with greys, so that faint stays faint.
+    pub(crate) fn legible(self, accent: Rgb) -> Rgb {
+        let luma = accent.luma();
+        if self.bg.luma() < 0.5 || luma <= 0.4 {
+            accent
+        } else {
+            let dim = 0.4 / luma;
+            Rgb(accent.0 * dim, accent.1 * dim, accent.2 * dim)
+        }
+    }
+
+    /// The palette's darker or lighter end, whichever reads on a cell colored `cell`.
+    pub(crate) fn ink_on(self, cell: Rgb) -> Rgb {
+        let (darker, lighter) = if self.fg.luma() < self.bg.luma() {
+            (self.fg, self.bg)
+        } else {
+            (self.bg, self.fg)
+        };
+        if cell.luma() > 0.5 { darker } else { lighter }
+    }
+
     /// The foreground laid over the background at `alpha`, as terminals grey text.
     pub(crate) fn grey(self, alpha: f64) -> Rgb {
         self.fg.blend(self.bg, alpha)

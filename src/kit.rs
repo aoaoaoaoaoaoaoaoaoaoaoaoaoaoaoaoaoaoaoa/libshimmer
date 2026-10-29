@@ -94,6 +94,34 @@ pub(crate) fn lag(value: f64, target: f64, tau: f64) -> f64 {
     value + (target - value) * (1.0 - (-TICK_SECS / tau).exp())
 }
 
+/// An inverse-square falloff: 1 at no distance, ½ at `radius`, and never a division by zero.
+pub(crate) fn glow(distance: f64, radius: f64) -> f64 {
+    let r = distance / radius;
+    1.0 / (1.0 + r * r)
+}
+
+/// One-dimensional value noise in [0, 1) for `seed`, smooth in `x`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "A lattice point is deliberately identified by its floored coordinate, far inside i64."
+)]
+pub(crate) fn noise(x: f64, seed: i64) -> f64 {
+    let floor = x.floor();
+    let u = smooth(0.0, 1.0, x - floor);
+    let point = floor as i64;
+    let salt = seed.wrapping_mul(0x27d4_eb2d);
+    hash(point ^ salt) * (1.0 - u) + hash(point.wrapping_add(1) ^ salt) * u
+}
+
+/// `n` as a coordinate.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "Counts of letters and cells are far below 2^53, where the conversion is exact."
+)]
+pub(crate) fn real(n: usize) -> f64 {
+    n as f64
+}
+
 /// The color at `x` in [0, 1] along evenly spaced `stops`.
 #[expect(
     clippy::cast_precision_loss,
