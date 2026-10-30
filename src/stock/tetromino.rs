@@ -1,4 +1,5 @@
 //! Tetromino: a four-by-four Tetris well in two octant cells, played by a bot as quanta arrive.
+//! While the host waits the falling piece blinks; between bouts the well holds still.
 
 use std::sync::LazyLock;
 
@@ -18,6 +19,7 @@ use crate::kit::frac;
 use crate::kit::hash;
 
 use super::OPUS;
+use crate::Spell;
 use crate::paint::{Ink, Palette, Rgb};
 use crate::recipe::{Glyphs, Recipe};
 use crate::stage::{Canvas, Shader, Stage};
@@ -415,7 +417,7 @@ impl Shader for Tetromino {
         });
         let mut own = [false; 16];
         if let Some(falling) = &self.falling
-            && (stage.busy() || frac(t) < 0.5)
+            && (stage.spell != Spell::Wait || frac(t) < 0.5)
         {
             for &(cx, cy) in &falling.cells {
                 if cy + falling.y >= 0 {

@@ -44,6 +44,7 @@ mod paint;
 mod ratatui;
 mod recipe;
 mod reservoir;
+mod rest;
 pub mod script;
 mod shimmer;
 mod stage;

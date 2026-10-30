@@ -81,7 +81,7 @@ impl Shader for Sandpile {
 
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
         let busy = stage.busy();
-        let rest = palette.grey(/*alpha*/ 0.6);
+        let grey = palette.grey(/*alpha*/ 0.6);
         let age = stage.t - self.at;
         let sliding = busy && (0.0..SLIDE).contains(&age);
         let span = f64::from(u32::try_from(stage.caption.len()).unwrap_or(u32::MAX));
@@ -94,7 +94,7 @@ impl Shader for Sandpile {
                     .fg(if busy {
                         ramp(&[STEEL, TANGERINE, CORAL], level)
                     } else {
-                        rest
+                        grey
                     })
                     .bold(busy && height >= 3)
             })
@@ -109,7 +109,7 @@ impl Shader for Sandpile {
             };
             let base = if lit > 0.0 { CORAL } else { STEEL };
             let mut ink = Ink::default()
-                .fg(base.blend(rest, /*alpha*/ 0.24 + 0.54 * (1.0 - lit)))
+                .fg(base.blend(grey, /*alpha*/ 0.24 + 0.54 * (1.0 - lit)))
                 .bold(busy && lit > 0.55);
             if busy && lit > 0.0 {
                 ink = ink.bg(CORAL.blend(palette.bg, /*alpha*/ 0.36 * lit));

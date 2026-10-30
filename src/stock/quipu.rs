@@ -27,7 +27,7 @@ impl Shader for Quipu {
     )]
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
         let busy = stage.busy();
-        let rest = palette.grey(/*alpha*/ 0.6);
+        let grey = palette.grey(/*alpha*/ 0.6);
         let digits = [
             (stage.quanta / 64) % 4,
             (stage.quanta / 16) % 4,
@@ -40,7 +40,7 @@ impl Shader for Quipu {
             .map(|(i, &digit)| {
                 let knot = usize::try_from(digit).unwrap_or_default();
                 Ink::of(KNOTS[knot])
-                    .fg(if busy { CORDS[i] } else { rest })
+                    .fg(if busy { CORDS[i] } else { grey })
                     .bold(busy && digit > 0)
             })
             .collect();
@@ -57,7 +57,7 @@ impl Shader for Quipu {
                 0.0
             };
             let mut ink = Ink::default()
-                .fg(cord.blend(if near > 0.5 { WHITE } else { rest }, 0.3 + 0.55 * near))
+                .fg(cord.blend(if near > 0.5 { WHITE } else { grey }, 0.3 + 0.55 * near))
                 .bold(busy && near > 0.55);
             if busy {
                 ink = ink.bg(cord.blend(palette.bg, /*alpha*/ 0.04 + 0.16 * near));

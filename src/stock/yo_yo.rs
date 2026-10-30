@@ -1,7 +1,7 @@
 //! Yo-yo: a cherry-red yo-yo on a cotton string. Work throws it down the line, where it spins and
 //! climbs back to the hand, and every 900 quanta it rocks the baby in a cradle of string. When the
 //! host waits it throws a sleeper, spinning at the end of the string until work tugs it home;
-//! between bouts it idles through lazy sleepers and the odd rock of the baby.
+//! between bouts it dozes at the string's end, turning a quarter every five seconds.
 
 use std::f64::consts::TAU;
 use std::mem;
@@ -11,6 +11,7 @@ use crate::Spell;
 use crate::kit::{Rng, bump, frac, real};
 use crate::paint::{Ink, Palette, Rgb};
 use crate::recipe::{Glyphs, Recipe};
+use crate::rest::LULL;
 use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
@@ -36,20 +37,20 @@ const LANDING: f64 = 30.0;
 const TUG: f64 = 1.5;
 /// Quanta between rocks of the baby.
 const LULLABY: u64 = 900;
-/// The least seconds in the hand between bouts, and the odds that a lazy throw rocks the baby.
-const LAZY: f64 = 6.0;
-const LAZY_ROCK: f64 = 0.3;
+/// The spin of a yo-yo dozing at the string's end between bouts, in radians a second: a quarter
+/// turn each lull.
+const DOZE: f64 = TAU / 4.0 / LULL;
 
 /// Where the yo-yo is in a throw.
 #[derive(Clone, Copy)]
 enum Throw {
-    /// In the hand, `rest` seconds before the next throw.
-    Hand { rest: f64 },
+    /// In the hand, `hold` seconds before the next throw.
+    Hand { hold: f64 },
     /// Unwinding down the string.
     Down,
     /// At the string's end on a quick throw.
     Bottom,
-    /// Spinning at the string's end until tugged home.
+    /// Spinning at the string's end until tugged home, or dozing there between bouts.
     Sleep,
     /// Swinging in a cradle of string mid-caption.
     Rock,
@@ -74,7 +75,7 @@ impl YoYo {
     fn new(seed: u64) -> Self {
         Self {
             rng: Rng::new(seed),
-            throw: Throw::Hand { rest: 0.5 },
+            throw: Throw::Hand { hold: 0.5 },
             since: 0.0,
             spin: 0.0,
             angle: 0.0,
@@ -119,23 +120,23 @@ impl Shader for YoYo {
         let idle = stage.spell == Spell::Idle;
         self.since += TICK_SECS;
         self.angle += TICK_SECS * self.spin;
-        let tau = if matches!(self.throw, Throw::Sleep) {
-            6.0
+        let sleeping = matches!(self.throw, Throw::Sleep);
+        self.spin = if idle && sleeping {
+            DOZE
         } else {
-            1.2
+            self.spin * (-TICK_SECS / if sleeping { 6.0 } else { 1.2 }).exp()
         };
-        self.spin *= (-TICK_SECS / tau).exp();
         let lullabies = stage.quanta / LULLABY;
         if lullabies > self.lullabies {
             self.lullabies = lullabies;
             self.rock = true;
         }
         let done = match self.throw {
-            Throw::Hand { rest } => self.since > if idle { rest.max(LAZY) } else { rest },
+            Throw::Hand { hold } => idle || self.since > hold,
             Throw::Down => self.since >= DOWN,
             Throw::Bottom => self.since >= BOTTOM,
-            Throw::Sleep => busy || self.spin < TUG,
-            Throw::Rock => self.since >= ROCK,
+            Throw::Sleep => busy || (!idle && self.spin < TUG),
+            Throw::Rock => idle || self.since >= ROCK,
             Throw::Up => self.since >= UP,
         };
         if !done {
@@ -144,26 +145,23 @@ impl Shader for YoYo {
         self.throw = match self.throw {
             Throw::Hand { .. } => Throw::Down,
             Throw::Down => {
-                self.spin = LANDING;
+                self.spin = if idle { DOZE } else { LANDING };
                 if busy {
                     if mem::take(&mut self.rock) {
                         Throw::Rock
                     } else {
                         Throw::Bottom
                     }
-                } else if idle && self.rng.chance(LAZY_ROCK) {
-                    Throw::Rock
                 } else {
                     Throw::Sleep
                 }
             }
+            Throw::Bottom if idle => Throw::Sleep,
             Throw::Bottom | Throw::Sleep | Throw::Rock => Throw::Up,
             Throw::Up => Throw::Hand {
-                rest: if busy {
+                hold: if busy {
                     0.1 + 0.7 * self.rng.unit()
                         / (0.5 + (stage.flow(/*window*/ 0.6) / 70.0).min(1.5))
-                } else if idle {
-                    LAZY * (1.0 + self.rng.unit())
                 } else {
                     1.2
                 },

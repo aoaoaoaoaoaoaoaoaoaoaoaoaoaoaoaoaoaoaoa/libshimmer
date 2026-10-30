@@ -1,16 +1,18 @@
 //! Moth: a moth worries the lamp at the head of the line. Lamplight warms the first letters and
 //! falls away along the caption; whenever the moth crosses between bulb and words, its shadow, huge
 //! as it nears the glass, sweeps across them. Work burns the lamp full and drives the moth faster,
-//! a burst of output now and then into the bulb. A wait sinks the lamp to half; between bouts it is
-//! a breathing night-light, beside which the moth rests, now and then taking a turn about it.
+//! a burst of output now and then into the bulb. A wait sinks the lamp to half, and the moth rests
+//! beside it, now and then taking a turn about it; between bouts the lamp is a breathing
+//! night-light, beside which the moth rests, now and then fluttering in place.
 
 use std::f64::consts::TAU;
 
 use super::OPUS;
 use crate::Spell;
-use crate::kit::{Rng, WHITE, bump, frac, glow, lag, noise, real, smooth};
+use crate::kit::{Lottery, Rng, WHITE, bump, frac, glow, lag, noise, real, smooth};
 use crate::paint::{Ink, Palette, Rgb};
 use crate::recipe::{Glyphs, Recipe};
+use crate::rest::LULL;
 use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
@@ -29,9 +31,16 @@ const DUSTY: Rgb = Rgb(182.0, 160.0, 128.0);
 const NIGHT: f64 = 0.16;
 const BREATH: f64 = 0.6;
 const BREATH_SECS: f64 = 5.0;
-/// Mean seconds between the resting moth's turns about the lamp, and the shortest turn's seconds.
+/// Mean seconds between a waiting moth's turns about the lamp, and the shortest turn's seconds.
 const RESTLESS: f64 = 9.0;
 const TURN: f64 = 1.2;
+/// Between bouts the perched moth beats its wings twice in place, about every forty seconds.
+const FLUTTER: Lottery = Lottery {
+    every: 3.0 * LULL,
+    odds: 0.4,
+    span: 0.4 * LULL,
+    seed: 9,
+};
 
 struct Moth {
     seed: i64,
@@ -41,7 +50,7 @@ struct Moth {
     theta: f64,
     /// The lamp's light in [0, 1].
     light: f64,
-    /// How settled the moth is beside the lamp, from 0 aloft to 1 at rest.
+    /// How settled the moth is beside the lamp, from 0 aloft to 1 perched.
     perch: f64,
     /// Wingbeats so far.
     flap: f64,
@@ -76,7 +85,11 @@ impl Shader for Moth {
             Spell::Idle => NIGHT * (1.0 + BREATH * (TAU * t / BREATH_SECS).sin()),
         };
         self.light = lag(self.light, light, if busy { 0.25 } else { 0.9 });
-        if !busy && t >= self.flight && self.perch > 0.9 && self.rng.chance(TICK_SECS / RESTLESS) {
+        if stage.spell == Spell::Wait
+            && t >= self.flight
+            && self.perch > 0.9
+            && self.rng.chance(TICK_SECS / RESTLESS)
+        {
             self.flight = t + TURN * (1.0 + 1.3 * self.rng.unit());
         }
         let aloft = busy || t < self.flight;
@@ -124,6 +137,9 @@ impl Shader for Moth {
         let aloft = self.perch < 0.5;
         let open = if aloft {
             frac(self.flap / 2.0) < 0.5
+        } else if stage.spell == Spell::Idle {
+            // two wingbeats: open, shut, open, shut
+            FLUTTER.at(t).is_some_and(|beat| frac(2.0 * beat) < 0.5)
         } else {
             frac(t / 3.7) < 0.1
         };

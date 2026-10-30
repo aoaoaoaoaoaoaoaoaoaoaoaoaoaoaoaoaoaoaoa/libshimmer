@@ -1,6 +1,8 @@
-//! Rubik: two quadrant cells are a two-color puzzle that scrambles and solves itself as quanta arrive.
+//! Rubik: two quadrant cells are a two-color puzzle that scrambles and solves itself as quanta arrive and,
+//! more slowly, while the host waits; between bouts it holds still.
 
 use super::OPUS;
+use crate::Spell;
 use crate::kit::{
     AZURE, CORAL, CYAN, GOLD, LIME, MAGENTA, MINT, PINK, QUADRANTS, SUN, TANGERINE, VIOLET, WHITE,
     chance, hash,
@@ -38,7 +40,7 @@ const SPLITS: [(Rgb, Rgb); 5] = [
     (TANGERINE, AZURE),
     (CORAL, MINT),
 ];
-/// Moves per round: scramble, hold, solve, flash, rest.
+/// Moves per round: scramble, hold, solve, flash, pause.
 const ROUND: u64 = 40;
 
 #[derive(Default)]
@@ -109,7 +111,7 @@ impl Rubik {
 
 impl Shader for Rubik {
     fn tick(&mut self, stage: &Stage) {
-        if !stage.busy() {
+        if stage.spell == Spell::Wait {
             self.waited += 2.0 * TICK_SECS;
         }
     }

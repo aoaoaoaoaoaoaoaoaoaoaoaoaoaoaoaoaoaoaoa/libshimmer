@@ -55,7 +55,7 @@ impl Shader for Relay {
 
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
         let busy = stage.busy();
-        let rest = palette.grey(/*alpha*/ 0.6);
+        let grey = palette.grey(/*alpha*/ 0.6);
         let width = stage.caption.len();
         let head = if width == 0 {
             0
@@ -69,13 +69,13 @@ impl Shader for Relay {
             let near = i.abs_diff(head) <= BUS_HALF_WIDTH;
             let mut ink = Ink::default()
                 .fg(if !busy {
-                    rest
+                    grey
                 } else if here {
                     WHITE
                 } else if near && bit {
                     ICE
                 } else {
-                    rest
+                    grey
                 })
                 .bold(busy && (here || bit));
             if busy {
@@ -91,11 +91,7 @@ impl Shader for Relay {
             .map(|bit| {
                 let on = (self.bits >> bit) & 1 == 1;
                 Ink::of(if on { '●' } else { '○' })
-                    .fg(if busy {
-                        if on { CYAN } else { STEEL }
-                    } else {
-                        rest
-                    })
+                    .fg(if on { CYAN } else { STEEL })
                     .bold(busy && on)
             })
             .collect();

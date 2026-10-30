@@ -88,7 +88,7 @@ impl Shader for Phyllotaxis {
     )]
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
         let busy = stage.busy();
-        let rest = palette.grey(/*alpha*/ 0.6);
+        let grey = palette.grey(/*alpha*/ 0.6);
         let bloom = (0.0..BLOOM).contains(&(stage.t - self.bloom));
         let mut plate = [None; 6 * 4];
         for floret in self.florets.iter().take(self.count) {
@@ -99,7 +99,7 @@ impl Shader for Phyllotaxis {
         canvas.mark = (0..3)
             .map(|cell| {
                 let mut bits = 0;
-                let mut tone = rest;
+                let mut tone = grey;
                 for y in 0..4 {
                     for x in 0..2 {
                         if let Some(floret) = plate[6 * y + 2 * cell + x] {
@@ -114,9 +114,7 @@ impl Shader for Phyllotaxis {
                         }
                     }
                 }
-                Ink::of(OCTANTS[bits])
-                    .fg(if busy { tone } else { rest })
-                    .bold(busy && bits != 0)
+                Ink::of(OCTANTS[bits]).fg(tone).bold(busy && bits != 0)
             })
             .collect();
         let quantum_hue = stage.quanta as f64 / 900.0;
@@ -135,7 +133,7 @@ impl Shader for Phyllotaxis {
                         /*lightness*/ 0.38 + 0.3 * lit,
                     )
                 } else {
-                    rest
+                    grey
                 })
                 .bold(busy && lit > 0.82)
         });

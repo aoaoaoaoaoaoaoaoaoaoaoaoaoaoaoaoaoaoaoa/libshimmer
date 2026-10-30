@@ -112,9 +112,15 @@ impl<G: Gauge> Shimmer<G> {
     }
 
     /// Runs the whole ticks that `dt` completes, carrying the remainder to the next call. A gap
-    /// longer than [`STALE`] runs one tick and drops the remainders.
+    /// longer than [`STALE`] runs one tick and drops the remainders. Between bouts, shimmer time
+    /// runs at a quarter of the host's.
     pub fn advance(&mut self, dt: Duration) {
-        for _ in 0..self.clock.due(dt) {
+        let tempo = if self.stage.spell == Spell::Idle {
+            crate::rest::TEMPO
+        } else {
+            1.0
+        };
+        for _ in 0..self.clock.due(dt, tempo) {
             let quanta = self.clock.quanta(self.stage.intensity);
             self.stage.advance(quanta);
             self.shader.tick(&self.stage);
@@ -129,6 +135,7 @@ impl<G: Gauge> Shimmer<G> {
             ..Canvas::default()
         };
         self.shader.status(&self.stage, palette, &mut canvas);
+        crate::rest::settle(&mut canvas, &self.stage, palette);
         Row::paint(&self.stage.caption, canvas, motion)
     }
 
@@ -158,13 +165,13 @@ struct Clock {
 }
 
 impl Clock {
-    /// The ticks due after `dt`.
-    fn due(&mut self, dt: Duration) -> u32 {
+    /// The ticks due after `dt` of the host's time, while shimmer time runs at `tempo`.
+    fn due(&mut self, dt: Duration, tempo: f64) -> u32 {
         if dt > STALE {
             *self = Self::default();
             return 1;
         }
-        self.owed += dt;
+        self.owed += dt.mul_f64(tempo);
         let mut due = 0;
         while self.owed >= TICK {
             self.owed -= TICK;
@@ -248,9 +255,13 @@ mod tests {
     #[test]
     fn a_stale_gap_runs_one_tick() {
         let mut clock = Clock::default();
-        assert_eq!(clock.due(TICK / 2), 0);
-        assert_eq!(clock.due(STALE + Duration::from_nanos(1)), 1);
-        assert_eq!(clock.due(TICK / 2), 0, "a stale gap drops the time owed");
-        assert_eq!(clock.due(STALE), 31);
+        assert_eq!(clock.due(TICK / 2, 1.0), 0);
+        assert_eq!(clock.due(STALE + Duration::from_nanos(1), 1.0), 1);
+        assert_eq!(
+            clock.due(TICK / 2, 1.0),
+            0,
+            "a stale gap drops the time owed"
+        );
+        assert_eq!(clock.due(STALE, 1.0), 31);
     }
 }

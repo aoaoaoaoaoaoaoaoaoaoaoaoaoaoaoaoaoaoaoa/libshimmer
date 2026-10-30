@@ -109,14 +109,14 @@ impl Shader for Turing {
 
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
         let busy = stage.busy();
-        let rest = palette.grey(/*alpha*/ 0.6);
+        let grey = palette.grey(/*alpha*/ 0.6);
         let tone = self.tone();
         canvas.mark = vec![
             Ink::of(self.state.map_or('H', State::glyph))
-                .fg(if busy { tone } else { rest })
+                .fg(tone)
                 .bold(busy),
-            Ink::of(if self.tape[self.head] { '1' } else { '0' }).fg(if busy { ICE } else { rest }),
-            Ink::of(self.motion()).fg(if busy { tone } else { rest }),
+            Ink::of(if self.tape[self.head] { '1' } else { '0' }).fg(ICE),
+            Ink::of(self.motion()).fg(tone),
         ];
         let width = stage.caption.len();
         if width == 0 {
@@ -127,13 +127,13 @@ impl Shader for Turing {
             let bit = self.tape[(self.head + TAPE + i - focus) % TAPE];
             let here = i == focus && busy;
             let mut ink = Ink::default().fg(if !busy {
-                rest
+                grey
             } else if here {
                 WHITE
             } else if bit {
                 ICE
             } else {
-                rest
+                grey
             });
             if busy {
                 if here {

@@ -1,9 +1,12 @@
-//! Critter: a three-cell face at the bullet that reacts to the quantum stream and dozes while waiting.
+//! Critter: a three-cell face at the bullet that reacts to the quantum stream and dozes while waiting; between bouts it
+//! sleeps, now and then half-waking for a moment.
 
 use super::OPUS;
+use crate::Spell;
 use crate::kit::{AZURE, CORAL, CYAN, LIME, Lottery, MINT, PINK, STEEL, SUN, VIOLET, chance, frac};
 use crate::paint::{Ink, Palette, Rgb};
 use crate::recipe::{Glyphs, Recipe};
+use crate::rest::LULL;
 use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
@@ -20,6 +23,13 @@ const SNEEZE: Lottery = Lottery {
     odds: 0.15,
     span: 0.9,
     seed: 5,
+};
+/// Between bouts the sleeper half-wakes, about once a minute, for two and a half seconds.
+const STIR: Lottery = Lottery {
+    every: 4.0 * LULL,
+    odds: 0.3,
+    span: 0.5 * LULL,
+    seed: 11,
 };
 const WINK: Lottery = Lottery {
     every: 7.0,
@@ -97,7 +107,9 @@ impl Critter {
     }
     fn mood(&self, stage: &Stage) -> Mood {
         if !stage.busy() {
-            return if stage.spell_t < 3.0 {
+            return if stage.spell_t < 3.0
+                || (stage.spell == Spell::Idle && STIR.at(stage.t).is_some())
+            {
                 Mood::Sleepy
             } else {
                 Mood::Asleep

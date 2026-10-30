@@ -75,7 +75,7 @@ impl Shader for Tectonic {
     )]
     fn status(&self, stage: &Stage, palette: Palette, canvas: &mut Canvas) {
         let busy = stage.busy();
-        let rest = palette.grey(/*alpha*/ 0.6);
+        let grey = palette.grey(/*alpha*/ 0.6);
         let width = stage.caption.len();
         let fault = if width > 1 {
             1 + self.fault % (width - 1)
@@ -101,7 +101,7 @@ impl Shader for Tectonic {
             let mut ink = Ink::default().fg(if busy {
                 side.blend(STEEL, /*alpha*/ 0.38 - 0.18 * self.stress + 0.1 * lit)
             } else {
-                rest
+                grey
             });
             if busy {
                 let alpha = if i == fault {
@@ -121,7 +121,7 @@ impl Shader for Tectonic {
             .map(|gauge| {
                 let level = (self.stress * 3.0 - f64::from(gauge)).clamp(0.0, 1.0);
                 Ink::of(BLOCKS[(level * 7.0).round() as usize])
-                    .fg(if busy { GOLD.blend(CORAL, level) } else { rest })
+                    .fg(GOLD.blend(CORAL, level))
                     .bold(busy && level > 0.25)
             })
             .collect();

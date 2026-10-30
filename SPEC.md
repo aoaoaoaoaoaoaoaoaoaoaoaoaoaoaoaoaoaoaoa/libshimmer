@@ -19,7 +19,7 @@ A shimmer is made from a **Recipe**: a name, a blurb, a credit, and a constructo
 
 The host tells the shimmer what it is doing. The **Spell** is `Busy` while the host produces, `Wait` while it is blocked on something external, and `Idle` otherwise; a **Bout** is a stretch of `Busy` and `Wait` between two `Idle`s, such as one turn of the codex agent. The **Intensity** is how hard the host works: a number of at least 0, where 1.0 is brisk, measuring whatever the host chooses. libshimmer converts intensity into whole units of paced work, each a **Quantum**. A host that learns of work in lumps, such as a burst of tokens, can pour them into a **Reservoir**, which drains each lump over four seconds. The **Script** is a canned bout and the rest after it, playing in a loop, with which a picker previews a recipe.
 
-A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once.
+A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once. Between bouts the shimmer is at **Rest**: its time runs at a quarter of the host's, and its paint settles near grey (§4).
 
 To draw a frame, the host asks the shimmer for its row, passing its **Palette**, the terminal's default foreground and background colors, and its **Motion**, which says whether the mark and the letters may move. Painting changes nothing, and the paint depends only on the recipe, the seed, the commands so far, the palette, and the motion. The host lays the lead beside its own text, such as codex-tui's timer, and shades the line with the backdrop. A row is plain data; an optional feature converts it into ratatui spans and shades a ratatui buffer.
 
@@ -208,9 +208,11 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Unfit | Why a recipe cannot load for a host: glyphs the terminal lacks, or captions wider than the recipe paints well |
 | Stage | What a shader reads each tick, as a GPU shader reads uniforms |
 | Tick | One 32 ms step of shimmer time |
-| Clock | Converts the host's Δt into whole ticks, and intensity into whole quanta; a gap longer than `STALE` yields one tick |
+| Clock | Converts the host's Δt into whole ticks, and intensity into whole quanta; a gap longer than `STALE` yields one tick; at rest, a quarter as many ticks |
 | Spell | `Busy`: producing; `Wait`: blocked on something external; `Idle`: no bout |
 | Bout | A stretch of `Busy` and `Wait` between two `Idle`s |
+| Rest | The stretch between two bouts, while the spell is `Idle`, in which paint settles near grey |
+| Lull | The least time between a resting recipe's choreographed moves: five seconds of the host's |
 | Intensity | How hard the host works: at least 0, where 1.0 is brisk, the most the stage shows linearly |
 | Quantum | One whole unit of paced work, as the stage counts it: 100 a second at brisk intensity, logarithmically more beyond |
 | Reservoir | Turns lumps of work into a flow, draining each over 4 s |
@@ -254,7 +256,13 @@ stateDiagram-v2
 
 Transitions read `command / effect`, and `idle` goes to the shader. Setting the current spell again is not a transition. The note's commands change data, not state: a changed caption restarts its age, and `advance` runs the ticks the clock owes. A recipe that does not fit the host yields `Unfit` instead of a shimmer. Ticks and paint run in every state, `Idle` included.
 
-Busy, waiting, and between bouts are exclusive states, so they are one enum, and ending a bout is entering `Idle`, which makes a lost or doubled end impossible (P5). There is no reset: clearing the caption is `show("")`, ending a bout is `set_spell(Idle)`, and a fresh shimmer is `Shimmer::new`. Each shader paints `Idle` as it chooses, with an animation of its own or as it paints `Wait`; the stock shaders paint it as `Wait`. A host may hide its status line between bouts, as codex-tui does, or keep it and show the idle paint.
+Busy, waiting, and between bouts are exclusive states, so they are one enum, and ending a bout is entering `Idle`, which makes a lost or doubled end impossible (P5). There is no reset: clearing the caption is `show("")`, ending a bout is `set_spell(Idle)`, and a fresh shimmer is `Shimmer::new`. Each shader paints `Idle` as it chooses, and rest settles the paint. A host may hide its status line between bouts or keep it, as codex-tui does, and show the resting paint.
+
+### Rest
+
+Rest gives every recipe one look between bouts: near grey and nearly still. While the spell is `Idle`, shimmer time runs at a quarter of the host's, and whatever the shader paints settles before the host sees it. Each ink settles toward the grey terminals dim text to, the foreground at 60% over the background: it keeps 30% of its departure from that grey, no more saturated than 16% and within 0.04 of the grey's luma. Each background keeps 35% of its departure from the palette's background, under the same saturation. The kept share swells and ebbs by 35% over eight seconds, a bout's paint eases into rest over two, and bold lets go halfway.
+
+A recipe may give rest a choreography of its own. A choreographed move comes at most once a lull and may be a brief burst, such as a moth's two wingbeats; most stock recipes rest still or drift.
 
 ## 5 Protocol
 

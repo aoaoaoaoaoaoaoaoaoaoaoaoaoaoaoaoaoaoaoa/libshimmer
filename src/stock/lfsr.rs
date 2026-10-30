@@ -217,7 +217,7 @@ impl Wiring {
 struct Lfsr {
     rng: Rng,
     /// Recent bits, newest first: bit i lights cell i, the caption's graphemes and then the tail's.
-    /// The register is the low `wiring.degree()` bits; the rest have been shifted out.
+    /// The register is the low `wiring.degree()` bits; older bits have been shifted out.
     trail: u128,
     wiring: Wiring,
     /// The caption the wiring serves, by [`Stage::captions`], and when it was drawn.
@@ -650,7 +650,7 @@ fn holds(bits: u128, cell: usize) -> bool {
     u32::try_from(cell)
         .ok()
         .and_then(|cell| bits.checked_shr(cell))
-        .is_some_and(|rest| rest & 1 == 1)
+        .is_some_and(|shifted| shifted & 1 == 1)
 }
 
 #[cfg(test)]
@@ -685,16 +685,16 @@ mod tests {
     fn zsigmondy_primes_factor_every_mersenne_number() {
         let mersenne = |exponent: usize| u64::MAX >> (DEGREES - exponent);
         for degree in 1..=DEGREES {
-            let mut rest = mersenne(degree);
+            let mut cofactor = mersenne(degree);
             for order in (1..=degree).filter(|order| degree.is_multiple_of(*order)) {
                 for prime in ZSIGMONDY[order - 1] {
                     assert_eq!(mersenne(order) % prime, 0, "{prime} ∤ 2^{order} − 1");
-                    while rest % prime == 0 {
-                        rest /= prime;
+                    while cofactor % prime == 0 {
+                        cofactor /= prime;
                     }
                 }
             }
-            assert_eq!(rest, 1, "2^{degree} − 1 keeps an unlisted prime");
+            assert_eq!(cofactor, 1, "2^{degree} − 1 keeps an unlisted prime");
         }
     }
 }
