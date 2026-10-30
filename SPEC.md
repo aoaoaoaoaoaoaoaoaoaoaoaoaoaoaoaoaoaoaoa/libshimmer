@@ -233,6 +233,8 @@ Intensity is one sticky number beside the spell. libshimmer knows only its value
 
 The gauge is a type, so that an unchecked caption sent to a narrow shimmer is a compile error and a host that shows any text pays nothing. Every stock recipe paints wide graphemes well, because paint refuses a substitute glyph whose width differs from the text it replaces: a recipe's declaration states where it looks right, not whether the host's text moves.
 
+Paint keeps one restraint across the roster: it styles a cell with color, bold, and underline, never italic, and it never scrambles the caption into other glyphs.
+
 ## 4 Lifecycle
 
 ```mermaid
