@@ -12,7 +12,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Frost",
-    blurb: "frost creeps in while you wait; work thaws it",
+    blurb: "frost creeps in; work thaws it",
     credit: OPUS,
     needs: Glyphs::BASE,
     wide: true,

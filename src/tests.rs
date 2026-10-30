@@ -198,3 +198,16 @@ proptest! {
         }
     }
 }
+
+/// P12: a picker shows every blurb on one line.
+#[test]
+fn every_blurb_fits_one_line() {
+    for recipe in stock::ROSTER {
+        let width = recipe.blurb().width();
+        assert!(
+            width <= 36,
+            "{}'s blurb spans {width} columns",
+            recipe.name()
+        );
+    }
+}

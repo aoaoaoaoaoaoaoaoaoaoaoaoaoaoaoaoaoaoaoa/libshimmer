@@ -17,7 +17,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "LFSR",
-    blurb: "a primitive polynomial shifts the caption",
+    blurb: "a primitive polynomial shifts text",
     credit: USER,
     needs: Glyphs::BASE,
     wide: true,

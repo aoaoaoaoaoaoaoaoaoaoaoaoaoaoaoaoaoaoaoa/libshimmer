@@ -16,7 +16,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Yo-yo",
-    blurb: "work throws the yo-yo; waiting, it sleeps",
+    blurb: "work throws it; waiting, it sleeps",
     credit: OPUS,
     needs: Glyphs::BASE,
     wide: true,

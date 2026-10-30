@@ -17,7 +17,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Moth",
-    blurb: "a moth circles the lamp; its shadow sweeps the line",
+    blurb: "a moth and its shadow circle a lamp",
     credit: OPUS,
     needs: Glyphs::BASE,
     wide: true,

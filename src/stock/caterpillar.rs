@@ -15,7 +15,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Caterpillar",
-    blurb: "an inchworm crawls; after a bout, a butterfly",
+    blurb: "an inchworm crawls; rest gives wings",
     credit: OPUS,
     needs: Glyphs::BASE,
     wide: true,

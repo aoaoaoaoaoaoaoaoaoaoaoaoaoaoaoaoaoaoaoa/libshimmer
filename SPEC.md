@@ -312,3 +312,4 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P9 | No caption, intensity, or Δt causes a panic. | `Intensity::new` saturates; property test |
 | P10 | Ticks never read colors; colors exist only at paint. | by construction: the stage holds no palette |
 | P11 | A recipe paints only the base glyphs and the repertoires it declares. | test across `ROSTER` on every glyph of a scripted take |
+| P12 | A blurb spans at most 36 columns, so a picker shows it on one line. | test across `ROSTER` |

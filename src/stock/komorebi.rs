@@ -12,7 +12,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Komorebi",
-    blurb: "sunlight through leaves dapples the caption",
+    blurb: "sunlight dapples through leaves",
     credit: OPUS,
     needs: Glyphs::BASE,
     wide: true,

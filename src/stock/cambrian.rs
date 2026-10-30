@@ -12,7 +12,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Cambrian",
-    blurb: "automaton rules mutate and fight for the caption",
+    blurb: "rival automata fight for the caption",
     credit: USER,
     needs: Glyphs::BASE,
     wide: true,

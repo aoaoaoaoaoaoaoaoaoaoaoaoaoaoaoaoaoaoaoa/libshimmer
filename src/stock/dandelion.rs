@@ -16,7 +16,7 @@ use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
 
 pub(super) const RECIPE: Recipe = Recipe {
     name: "Dandelion",
-    blurb: "work blows the seed head; seeds drift away",
+    blurb: "work sets the seeds adrift",
     credit: OPUS,
     needs: Glyphs::BASE,
     wide: true,
