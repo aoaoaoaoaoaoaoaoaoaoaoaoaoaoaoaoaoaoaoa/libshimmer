@@ -6,6 +6,7 @@ mod critter;
 mod dandelion;
 mod fireflies;
 mod forge;
+mod fortress;
 mod frost;
 mod komorebi;
 mod lava_lamp;
@@ -55,6 +56,7 @@ pub static ROSTER: &[Recipe] = &[
     komorebi::RECIPE,
     frost::RECIPE,
     yo_yo::RECIPE,
+    fortress::RECIPE,
 ];
 
 /// The stock recipe named `name`.
