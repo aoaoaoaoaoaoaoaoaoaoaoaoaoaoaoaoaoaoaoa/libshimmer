@@ -1,0 +1,13 @@
+# The README's roster reel: dumps every stock recipe's frames from this checkout for ../roster.py.
+[package]
+name = "reel"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Not a member of libshimmer's workspace.
+[workspace]
+
+[dependencies]
+libshimmer = { path = "../..", features = ["ratatui"] }
+ratatui-core = { version = "0.1", features = ["underline-color"] }
