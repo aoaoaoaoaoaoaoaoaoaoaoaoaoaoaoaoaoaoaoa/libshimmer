@@ -1,15 +1,21 @@
 [workspace]
-members = ["."]
+members = [".", "libshimmer-ratatui"]
 resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88"
+license = "MIT-0"
+repository = "https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/libshimmer"
 
 [package]
 name = "libshimmer"
-version = "0.2.2"
-edition = "2024"
-rust-version = "1.98"
-license = "MIT-0"
+version = "1.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 description = "Animated status lines for terminal UIs, paced by the host's work"
-repository = "https://github.com/aoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoaoa/libshimmer"
+repository.workspace = true
 readme = "README.md"
 keywords = ["tui", "terminal", "animation", "ratatui", "status"]
 categories = ["command-line-interface"]
@@ -18,14 +24,7 @@ include = ["/src", "/README.md", "/LICENSE"]
 [lints]
 workspace = true
 
-[package.metadata.docs.rs]
-all-features = true
-
-[features]
-ratatui = ["dep:ratatui-core", "ratatui-core/underline-color"]
-
 [dependencies]
-ratatui-core = { version = "0.1", optional = true }
 unicode-segmentation = "1.12"
 unicode-width = "0.2"
 

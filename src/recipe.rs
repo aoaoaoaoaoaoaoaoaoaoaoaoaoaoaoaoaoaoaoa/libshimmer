@@ -3,7 +3,6 @@
 use std::error::Error;
 use std::fmt;
 
-use crate::gauge::Gauge;
 use crate::kit::OCTANTS;
 use crate::stage::Shader;
 
@@ -55,12 +54,10 @@ pub(crate) fn repertoire(glyph: char) -> Glyphs {
     }
 }
 
-/// Why a recipe cannot load for a host: glyphs the terminal lacks, or captions wider than the
-/// recipe paints well.
+/// Why a recipe cannot load for a host: glyphs the terminal lacks.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Unfit {
     missing: Glyphs,
-    narrow: bool,
 }
 
 impl Unfit {
@@ -68,27 +65,21 @@ impl Unfit {
     pub fn missing(self) -> Glyphs {
         self.missing
     }
-
-    /// Whether the recipe paints only narrow graphemes, for a shimmer whose gauge is wide.
-    pub fn narrow(self) -> bool {
-        self.narrow
-    }
 }
 
 impl fmt::Display for Unfit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut clauses = REPERTOIRES
+        f.write_str("the terminal lacks ")?;
+        let lacking = REPERTOIRES
             .iter()
-            .filter(|(repertoire, _)| self.missing.contains(*repertoire))
-            .map(|(_, name)| format!("the terminal lacks {name}"))
-            .chain(
-                self.narrow
-                    .then(|| "the recipe paints only narrow graphemes".to_owned()),
-            );
-        if let Some(first) = clauses.next() {
-            f.write_str(&first)?;
+            .filter(|(repertoire, _)| self.missing.contains(*repertoire));
+        for (i, (_, name)) in lacking.enumerate() {
+            if i > 0 {
+                f.write_str(", ")?;
+            }
+            f.write_str(name)?;
         }
-        clauses.try_for_each(|clause| write!(f, "; {clause}"))
+        Ok(())
     }
 }
 
@@ -100,12 +91,13 @@ pub struct Recipe {
     pub(crate) blurb: &'static str,
     pub(crate) credit: &'static str,
     pub(crate) needs: Glyphs,
-    pub(crate) wide: bool,
     pub(crate) summon: fn(u64) -> Box<dyn Shader>,
 }
 
 impl Recipe {
-    /// The name a picker shows, unique among recipes.
+    /// The name a picker shows and a host persists, unique among recipes:
+    /// [`stock::named`](crate::stock::named) finds the recipe by it, and no release of the same
+    /// major version renames or removes it.
     pub fn name(&self) -> &'static str {
         self.name
     }
@@ -125,26 +117,15 @@ impl Recipe {
         self.needs
     }
 
-    /// Whether the recipe paints graphemes two cells wide well.
-    pub fn wide(&self) -> bool {
-        self.wide
-    }
-
-    /// Whether a shimmer of gauge `G` can run the recipe on a terminal that draws `glyphs`.
+    /// Whether a shimmer can run the recipe on a terminal that draws `glyphs`.
     ///
     /// # Errors
     ///
-    /// [`Unfit`] when the terminal lacks glyphs the recipe needs, or when `G` is wide and the
-    /// recipe paints only narrow graphemes.
-    pub fn fits<G: Gauge>(&self, glyphs: Glyphs) -> Result<(), Unfit> {
-        let unfit = Unfit {
-            missing: self.needs.without(glyphs),
-            narrow: G::WIDE && !self.wide,
-        };
-        if unfit.missing == Glyphs::BASE && !unfit.narrow {
-            Ok(())
-        } else {
-            Err(unfit)
+    /// [`Unfit`] when the terminal lacks glyphs the recipe needs.
+    pub fn fits(&self, glyphs: Glyphs) -> Result<(), Unfit> {
+        match self.needs.without(glyphs) {
+            Glyphs::BASE => Ok(()),
+            missing => Err(Unfit { missing }),
         }
     }
 }
@@ -154,7 +135,6 @@ impl fmt::Debug for Recipe {
         f.debug_struct("Recipe")
             .field("name", &self.name)
             .field("needs", &self.needs)
-            .field("wide", &self.wide)
             .finish_non_exhaustive()
     }
 }

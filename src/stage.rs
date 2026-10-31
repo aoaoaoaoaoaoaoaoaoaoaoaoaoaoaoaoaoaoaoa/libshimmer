@@ -14,7 +14,7 @@ const HISTORY: usize = 128;
 
 /// A recipe's animation, written like a GPU shader against the [`Stage`] its shimmer hands it.
 /// Colors exist only at paint: [`Shader::tick`] sees no palette.
-pub(crate) trait Shader: Send {
+pub(crate) trait Shader: Send + Sync {
     /// Advances the shader's own state by one tick.
     fn tick(&mut self, _stage: &Stage) {}
     /// Ends a bout: the spell entered [`Spell::Idle`].

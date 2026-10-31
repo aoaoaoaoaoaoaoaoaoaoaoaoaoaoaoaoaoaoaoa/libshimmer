@@ -21,9 +21,9 @@ The host tells the shimmer what it is doing. The **Spell** is `Busy` while the h
 
 A shimmer keeps its own time, in **Ticks** of 32 ms. Each frame, the host passes the time elapsed since the previous frame, and the shimmer's **Clock** converts it into whole ticks; a gap longer than one second counts as one tick. On each tick, the shader reads the **Stage**: the shimmer's time, the caption and its age, the spell and its age, the intensity, and the quanta counted so far. A shader can thus quicken as work intensifies, change while the host waits, and paint `Idle` with an animation of its own; when a bout ends, the shader is told once. Between bouts the shimmer is at **Rest**: its time runs at a quarter of the host's, and its paint settles near grey (§4).
 
-To draw a frame, the host asks the shimmer for its row, passing its **Palette**, the terminal's default foreground and background colors, and its **Motion**, which says whether the mark and the letters may move. Painting changes nothing, and the paint depends only on the recipe, the seed, the commands so far, the palette, and the motion. The host lays the lead beside its own text, such as codex-tui's timer, and shades the line with the backdrop. A row is plain data; an optional feature converts it into ratatui spans and shades a ratatui buffer.
+To draw a frame, the host asks the shimmer for its row, passing its **Palette**, the terminal's default foreground and background colors, and its **Motion**, which says whether the mark and the letters may move. Painting changes nothing, and the paint depends only on the recipe, the seed, the commands so far, the palette, and the motion. The host lays the lead beside its own text, such as codex-tui's timer, and shades the line with the backdrop. A row is plain data; a companion crate, libshimmer-ratatui, converts it into ratatui spans and shades a ratatui buffer.
 
-Two facts about a host limit which recipes it can run: the glyphs its terminal draws, and whether its captions hold wide graphemes. Some recipes paint glyphs beyond a base set that every target terminal draws; the only such repertoire is Unicode 16's octants, and the host states, as **Glyphs**, the repertoires its terminal draws. CJK characters and most emoji are two cells wide, and the host fixes a **Gauge** in the shimmer's type: `Wide` takes any caption, and `Narrow` takes only a **NarrowStr**, text the host has checked to hold no wide grapheme. Each recipe declares the repertoires it needs and whether it paints wide graphemes well. Making a shimmer from a recipe that does not fit the host yields **Unfit** instead, naming what is missing, and a picker can ask beforehand and withhold such a recipe.
+One fact about a host limits which recipes it can run: the glyphs its terminal draws. Some recipes paint glyphs beyond a base set that every target terminal draws; the only such repertoire is Unicode 16's octants, and the host states, as **Glyphs**, the repertoires its terminal draws. Each recipe declares the repertoires it needs. Making a shimmer from a recipe that does not fit the host yields **Unfit** instead, naming what is missing, and a picker can ask beforehand and withhold such a recipe. Captions may hold any grapheme: CJK characters and most emoji are two cells wide, and every recipe paints them well, because paint refuses a substitute glyph whose width differs from the text it replaces.
 
 The host keeps terminal input and output; frame scheduling; the status line's layout; measuring work; detecting the terminal's colors, color depth, and glyphs; the picker; and the user's choice. libshimmer never calls out.
 
@@ -40,18 +40,22 @@ flowchart TB
   host["<b>Host TUI</b><br/>codex-tui, memview, …<br/>owns the terminal, frame loop,<br/>layout, work measurement,<br/>colors, motion, the choice"]:::host
   term["<b>Terminal</b>"]:::outside
   lib["<b>libshimmer</b><br/>owns the catalog, each<br/>shimmer's stage and clock,<br/>pacing, paint"]:::subject
-  core["ratatui-core"]:::dep
+  adapter["<b>libshimmer-ratatui</b><br/>draws rows in ratatui"]:::subject
+  core["ratatui-core 0.1"]:::dep
   uni["unicode-segmentation,<br/>unicode-width"]:::dep
 
   work -->|"turn, tool, usage events"| host
   host -->|frames| term
   host -->|"recipe, seed, glyphs,<br/>caption, spell, intensity,<br/>Δt, palette, motion"| lib
   lib -->|"paint: Row, Ink<br/>catalog: ROSTER<br/>refusal: Unfit"| host
-  lib -.->|"feature ratatui"| core
   lib -.-> uni
+  host -->|"Row, Ink"| adapter
+  adapter -->|"spans, shaded buffer"| host
+  adapter -.-> lib
+  adapter -.-> core
 ```
 
-Blue: libshimmer. White: the host. Grey: outside both. Dashed: a Cargo dependency. A solid arrow carries the data on its label in its direction. The host initiates every exchange; libshimmer never calls out.
+Blue: libshimmer's crates. White: the host. Grey: outside both. Dashed: a Cargo dependency. A solid arrow carries the data on its label in its direction. The host initiates every exchange; libshimmer never calls out.
 
 | Concern | Owner | Crossing |
 |---|---|---|
@@ -68,10 +72,9 @@ Blue: libshimmer. White: the host. Grey: outside both. Dashed: a Cargo dependenc
 | randomness | libshimmer, seeded by the host | `seed` |
 | stock catalog | libshimmer | `ROSTER` |
 | glyphs the terminal draws | host | `Glyphs`, at `Shimmer::new` |
-| whether captions hold wide graphemes | host | the gauge, a type parameter |
 | what each recipe needs | libshimmer | `Recipe::fits`, `Unfit` |
 
-The host passes Δt, and libshimmer owns the fixed-step accumulator and the stale cutoff: reading the wall clock would break P1 to P4, and pickers, reels, and tests run on time that is not the wall's. A row is plain data (`Row`, `Ink`, `Rgb`), so that a host on any toolkit can draw it; the `ratatui` feature builds on `ratatui-core`, the crate ratatui designates for widget libraries. The status line's width does not cross: the backdrop holds at most 80 columns, and the host clips the rest. The status timer does not cross either; a host without one need not invent it.
+The host passes Δt, and libshimmer owns the fixed-step accumulator and the stale cutoff: reading the wall clock would break P1 to P4, and pickers, reels, and tests run on time that is not the wall's. A row is plain data (`Row`, `Ink`, `Rgb`), so that a host on any toolkit can draw it; libshimmer-ratatui draws it with `ratatui-core` 0.1, the crate ratatui designates for widget libraries, so that libshimmer itself takes no public dependency (§7). The status line's width does not cross: the backdrop holds at most 80 columns, and the host clips the rest. The status timer does not cross either; a host without one need not invent it.
 
 The catalog is closed: `Shader`, `Stage`, and the shaders' shared kit are crate-private. Opening them later is a minor release, and closing them a major one; an open `Shader` would freeze the stage's members.
 
@@ -84,23 +87,17 @@ libshimmer is published on crates.io from a public GitHub repository, so that an
 ```mermaid
 classDiagram
   direction LR
-  class Shimmer~G~ {
+  class Shimmer {
     +new(recipe, seed, glyphs) Result
-    +show(caption: G::Caption)
+    +show(caption)
     +set_spell(spell)
     +set_intensity(intensity)
     +advance(dt)
     +status(palette, motion) Row
     +bullet(palette) Ink
   }
-  class Gauge {
-    <<sealed trait>>
-    Narrow, captions as NarrowStr
-    Wide, captions as str
-  }
   class Recipe {
     +needs() Glyphs
-    +wide() bool
     +fits(glyphs) Result
   }
   class ROSTER {
@@ -126,7 +123,6 @@ classDiagram
   }
   class Ink
   Shimmer --> "1" Recipe
-  Shimmer ..> Gauge : typed by
   Shimmer ..> Spell : takes
   Shimmer ..> Intensity : takes
   Shimmer ..> Row : paints
@@ -134,7 +130,6 @@ classDiagram
   Recipe ..> Glyphs : needs
   Row "1" *-- "*" Ink
   style Shimmer fill:#e8f1fb,stroke:#0b5cad,color:#111
-  style Gauge fill:#e8f1fb,stroke:#0b5cad,color:#111
   style Recipe fill:#e8f1fb,stroke:#0b5cad,color:#111
   style ROSTER fill:#e8f1fb,stroke:#0b5cad,color:#111
   style Glyphs fill:#e8f1fb,stroke:#0b5cad,color:#111
@@ -144,7 +139,7 @@ classDiagram
   style Ink fill:#e8f1fb,stroke:#0b5cad,color:#111
 ```
 
-Blue: public, members marked `+`. Filled diamond: owns, with multiplicities; arrow: refers to; dashed arrow: uses. `Palette`, `Motion`, `NarrowStr`, `Unfit`, `Reservoir`, and the script appear in the glossary only.
+Blue: public, members marked `+`. Filled diamond: owns, with multiplicities; arrow: refers to; dashed arrow: uses. `Palette`, `Motion`, `Unfit`, `Reservoir`, and the script appear in the glossary only.
 
 ```mermaid
 classDiagram
@@ -200,12 +195,10 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Host | A terminal program that uses libshimmer |
 | Shimmer | One recipe's shader running on its stage and clock; what a host holds |
 | Shader | The animation: reads the stage each tick and paints a row |
-| Recipe | Catalog entry: name, blurb, credit, the glyphs and gauge it needs, and a constructor for its shader |
+| Recipe | Catalog entry: name, blurb, credit, the glyphs it needs, and a constructor for its shader |
 | ROSTER | The stock recipes, in picker order |
 | Glyphs | A set of glyph repertoires beyond the base set every target terminal draws: those a terminal draws, or those a recipe needs; only octants so far |
-| Gauge | The widest grapheme a shimmer's captions may hold, fixed by the host as a type parameter: `Narrow`, one cell, or `Wide`, two |
-| NarrowStr | Text checked to hold no grapheme wider than one cell; the caption of a narrow shimmer |
-| Unfit | Why a recipe cannot load for a host: glyphs the terminal lacks, or captions wider than the recipe paints well |
+| Unfit | Why a recipe cannot load for a host: glyphs the terminal lacks |
 | Stage | What a shader reads each tick, as a GPU shader reads uniforms |
 | Tick | One 32 ms step of shimmer time |
 | Clock | Converts the host's Δt into whole ticks, and intensity into whole quanta; a gap longer than `STALE` yields one tick; at rest, a quarter as many ticks |
@@ -230,8 +223,6 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 | Script | A looping canned bout and rest that previews a recipe |
 
 Intensity is one sticky number beside the spell. libshimmer knows only its value and its normalization: the host decides what it measures, and each shader how it shows it. A later intensity may carry up to three independent channels, each with a canonical projection onto fewer, so that a one-channel shader runs under any host. A host that learns of work in lumps pours them into a reservoir, the one owner of the drain time, and converts the flow into intensity by its own measure; the script drains its lumps the same way.
-
-The gauge is a type, so that an unchecked caption sent to a narrow shimmer is a compile error and a host that shows any text pays nothing. Every stock recipe paints wide graphemes well, because paint refuses a substitute glyph whose width differs from the text it replaces: a recipe's declaration states where it looks right, not whether the host's text moves.
 
 Paint keeps one restraint across the roster: it styles a cell with color, bold, and underline, never italic, and it never scrambles the caption into other glyphs.
 
@@ -315,3 +306,14 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P10 | Ticks never read colors; colors exist only at paint. | by construction: the stage holds no palette |
 | P11 | A recipe paints only the base glyphs and the repertoires it declares. | test across `ROSTER` on every glyph of a scripted take |
 | P12 | A blurb spans at most 36 columns, so a picker shows it on one line. | test across `ROSTER` |
+| P13 | A `Shimmer` is `Send` and `Sync`, as is every other public type, so a host may keep one on any thread. | compile-time assertion |
+
+## 7 Compatibility
+
+libshimmer follows SemVer from 1.0: a minor release adds, and only a major one breaks. Besides the API and the promises, SemVer covers:
+
+- **Recipe names.** A host persists a recipe by its name, which `stock::named` resolves. Within a major version no recipe is renamed or removed; the roster only grows, and its order is presentation.
+- **Paint.** How a recipe paints is not API: a minor release may change it, and P2 makes paint reproducible only within one version. A host that snapshots paint snapshots a still mark and still letters, which P8 fixes to the caption verbatim.
+- **ratatui.** libshimmer takes no public dependency. Its ratatui adapter is a crate of its own, libshimmer-ratatui, which stays at 0.x while ratatui-core does: a ratatui-core release that changes the adapter's types breaks the adapter alone.
+- **Rust.** The minimum Rust version, `rust-version` in `Cargo.toml`, rises only in a minor release.
+- **Growth.** `Spell`, `Ink`, and `Cue` are non-exhaustive, so a minor release may add a spell, a style, or a cue field. `Palette` and `Motion` are complete: the terminal's two default colors, and the two parts of a line that move.

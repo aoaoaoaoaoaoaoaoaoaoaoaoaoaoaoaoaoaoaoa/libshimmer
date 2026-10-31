@@ -1,0 +1,18 @@
+[package]
+name = "libshimmer-ratatui"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Draws libshimmer's animated status lines with ratatui"
+repository.workspace = true
+readme = "README.md"
+keywords = ["tui", "terminal", "animation", "ratatui", "status"]
+categories = ["command-line-interface"]
+
+[lints]
+workspace = true
+
+[dependencies]
+libshimmer = { version = "1.0.0", path = ".." }
+ratatui-core = { version = "0.1", features = ["underline-color"] }

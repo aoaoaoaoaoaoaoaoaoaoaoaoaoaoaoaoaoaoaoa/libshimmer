@@ -8,6 +8,7 @@ use std::io::{self, BufWriter, Write};
 use std::time::Duration;
 
 use libshimmer::{Glyphs, Motion, Palette, Rgb, Shimmer, TICK, script, stock};
+use libshimmer_ratatui::RowExt as _;
 use ratatui_core::buffer::Buffer;
 use ratatui_core::layout::Rect;
 use ratatui_core::style::{Color, Modifier};
@@ -43,7 +44,7 @@ fn hex(color: Color) -> String {
 
 fn main() -> io::Result<()> {
     let warm: u32 = std::env::args().nth(1).and_then(|a| a.parse().ok()).unwrap_or(1);
-    let palette = Palette { fg: Rgb(208.0, 208.0, 208.0), bg: Rgb(14.0, 14.0, 17.0) };
+    let palette = Palette { fg: Rgb::new(208, 208, 208), bg: Rgb::new(14, 14, 17) };
     let motion = Motion { mark: true, letters: true };
     let glyphs = Glyphs::BASE.union(Glyphs::OCTANTS);
     let mut shimmers = Vec::new();

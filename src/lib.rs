@@ -14,8 +14,8 @@
 //! and keeps no global state.
 //!
 //! A host that learns of work in lumps can smooth them with a [`Reservoir`], and a picker can
-//! preview a recipe by playing the [`script`]. The `ratatui` feature converts a row into ratatui
-//! spans and lays its backdrop into a ratatui buffer.
+//! preview a recipe by playing the [`script`]. The companion crate libshimmer-ratatui converts a
+//! row into ratatui spans and lays its backdrop into a ratatui buffer.
 //!
 //! ```
 //! use std::time::Duration;
@@ -23,12 +23,12 @@
 //! use libshimmer::{Glyphs, Intensity, Motion, Palette, Rgb, Shimmer, Spell, stock};
 //!
 //! let recipe = stock::named("Lava Lamp").expect("a stock recipe");
-//! let mut shimmer: Shimmer = Shimmer::new(recipe, 7, Glyphs::BASE)?;
+//! let mut shimmer = Shimmer::new(recipe, 7, Glyphs::BASE)?;
 //! shimmer.set_spell(Spell::Busy);
 //! shimmer.show("Compiling");
 //! shimmer.set_intensity(Intensity::new(0.6));
 //! shimmer.advance(Duration::from_millis(100));
-//! let palette = Palette { fg: Rgb(208.0, 208.0, 208.0), bg: Rgb(21.0, 21.0, 21.0) };
+//! let palette = Palette { fg: Rgb::new(208, 208, 208), bg: Rgb::new(21, 21, 21) };
 //! let row = shimmer.status(palette, Motion { mark: true, letters: true });
 //! let lead: String = row.cells().map(|(symbol, _)| symbol).collect();
 //! assert_eq!(lead, "● Compiling");
@@ -37,11 +37,8 @@
 
 use std::time::Duration;
 
-mod gauge;
 mod kit;
 mod paint;
-#[cfg(feature = "ratatui")]
-mod ratatui;
 mod recipe;
 mod reservoir;
 mod rest;
@@ -52,7 +49,6 @@ pub mod stock;
 #[cfg(test)]
 mod tests;
 
-pub use gauge::{Gauge, Narrow, NarrowStr, Wide};
 pub use paint::{Ink, Motion, Palette, Rgb, Row};
 pub use recipe::{Glyphs, Recipe, Unfit};
 pub use reservoir::Reservoir;
@@ -63,3 +59,9 @@ pub const TICK: Duration = Duration::from_millis(32);
 
 /// A gap between frames longer than this advances a shimmer by one tick, as after a pause in drawing.
 pub const STALE: Duration = Duration::from_secs(1);
+
+// P13: a host may keep a shimmer on any thread.
+const _: () = {
+    const fn crosses_threads<T: Send + Sync>() {}
+    crosses_threads::<Shimmer>();
+};

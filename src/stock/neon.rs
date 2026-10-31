@@ -11,7 +11,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a neon sign with a failing tube",
     credit: OPUS,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::new(Neon),
 };
 

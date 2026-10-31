@@ -11,7 +11,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a relay register walks the bus",
     credit: DEEPSEEK,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::<Relay>::default(),
 };
 

@@ -105,11 +105,18 @@ dependencies = [
 
 [[package]]
 name = "libshimmer"
-version = "0.2.2"
+version = "1.0.0"
 dependencies = [
- "ratatui-core",
  "unicode-segmentation",
  "unicode-width",
+]
+
+[[package]]
+name = "libshimmer-ratatui"
+version = "0.1.0"
+dependencies = [
+ "libshimmer",
+ "ratatui-core",
 ]
 
 [[package]]
@@ -163,6 +170,7 @@ name = "reel"
 version = "0.0.0"
 dependencies = [
  "libshimmer",
+ "libshimmer-ratatui",
  "ratatui-core",
 ]
 

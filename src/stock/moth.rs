@@ -20,7 +20,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a moth and its shadow circle a lamp",
     credit: OPUS,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |seed| Box::new(Moth::new(seed)),
 };
 

@@ -1,10 +1,8 @@
 //! A recipe's shader running on its own stage and clock, and the commands a host gives it.
 
 use std::fmt;
-use std::marker::PhantomData;
 use std::time::Duration;
 
-use crate::gauge::{Gauge, Wide};
 use crate::paint::{Ink, Motion, Palette, Row};
 use crate::recipe::{Glyphs, Recipe, Unfit};
 use crate::stage::{Canvas, Shader, Stage, TICK_SECS};
@@ -15,6 +13,7 @@ pub(crate) const QUANTA: f64 = 100.0;
 
 /// What the host is doing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Spell {
     /// Between bouts.
     #[default]
@@ -61,31 +60,27 @@ impl Intensity {
     }
 }
 
-/// One recipe's shader running on its own stage and clock: what a host holds. `Shimmer` alone is
-/// `Shimmer<Wide>`.
-pub struct Shimmer<G: Gauge = Wide> {
+/// One recipe's shader running on its own stage and clock: what a host holds.
+pub struct Shimmer {
     recipe: &'static Recipe,
     shader: Box<dyn Shader>,
     stage: Stage,
     clock: Clock,
-    gauge: PhantomData<G>,
 }
 
-impl<G: Gauge> Shimmer<G> {
+impl Shimmer {
     /// A shimmer of `recipe`, whose randomness `seed` determines, idle and with an empty caption.
     ///
     /// # Errors
     ///
-    /// [`Unfit`] when the terminal lacks glyphs the recipe needs, or when the gauge is wide and the
-    /// recipe paints only narrow graphemes.
+    /// [`Unfit`] when the terminal lacks glyphs the recipe needs.
     pub fn new(recipe: &'static Recipe, seed: u64, glyphs: Glyphs) -> Result<Self, Unfit> {
-        recipe.fits::<G>(glyphs)?;
+        recipe.fits(glyphs)?;
         Ok(Self {
             recipe,
             shader: (recipe.summon)(seed),
             stage: Stage::default(),
             clock: Clock::default(),
-            gauge: PhantomData,
         })
     }
 
@@ -95,8 +90,8 @@ impl<G: Gauge> Shimmer<G> {
     }
 
     /// Dresses `caption`, restarting its age when it changes.
-    pub fn show(&mut self, caption: G::Caption<'_>) {
-        self.stage.show(caption.as_ref());
+    pub fn show(&mut self, caption: &str) {
+        self.stage.show(caption);
     }
 
     /// Casts `spell`, restarting its age when it changes. Entering [`Spell::Idle`] ends the bout.
@@ -145,7 +140,7 @@ impl<G: Gauge> Shimmer<G> {
     }
 }
 
-impl<G: Gauge> fmt::Debug for Shimmer<G> {
+impl fmt::Debug for Shimmer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Shimmer")
             .field("recipe", &self.recipe.name)
@@ -228,7 +223,6 @@ mod tests {
         blurb: "",
         credit: "",
         needs: Glyphs::BASE,
-        wide: true,
         summon: |_| Box::<Recorder>::default(),
     };
 

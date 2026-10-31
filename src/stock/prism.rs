@@ -11,7 +11,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "a narrow band of the spectrum",
     credit: OPUS,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::<Prism>::default(),
 };
 

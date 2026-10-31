@@ -13,7 +13,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "letters flash and sync with output",
     credit: OPUS,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::new(Fireflies::new()),
 };
 

@@ -98,6 +98,7 @@ fn inflow(t: f64) -> f64 {
 
 /// What the script commands at one moment.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Cue {
     /// The spell to cast.
     pub spell: Spell,

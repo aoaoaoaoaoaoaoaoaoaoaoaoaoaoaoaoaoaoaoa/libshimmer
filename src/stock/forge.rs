@@ -13,7 +13,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "output stokes a forge",
     credit: OPUS,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::<Forge>::default(),
 };
 

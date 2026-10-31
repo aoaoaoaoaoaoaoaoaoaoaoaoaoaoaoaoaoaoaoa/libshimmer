@@ -11,7 +11,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "four knotted cords tally the output",
     credit: DEEPSEEK,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::new(Quipu),
 };
 

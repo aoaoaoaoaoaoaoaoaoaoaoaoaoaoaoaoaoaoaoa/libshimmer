@@ -7,11 +7,17 @@ use crate::stage::{Canvas, Caption};
 /// Columns of backdrop a row keeps.
 pub(crate) const BACKDROP: usize = 80;
 
-/// A 24-bit color whose channels stay fractional until they reach the terminal.
+/// A 24-bit color whose channels stay fractional until they reach the terminal. A host builds one
+/// from bytes with [`Rgb::new`].
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Rgb(pub f64, pub f64, pub f64);
+pub struct Rgb(pub(crate) f64, pub(crate) f64, pub(crate) f64);
 
 impl Rgb {
+    /// The color whose channels are these bytes.
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
+        Self(r as f64, g as f64, b as f64)
+    }
+
     /// This color laid over `under` at `alpha`.
     pub(crate) fn blend(self, under: Rgb, alpha: f64) -> Rgb {
         let mix = |a: f64, b: f64| a * alpha + b * (1.0 - alpha);
@@ -41,7 +47,7 @@ impl Rgb {
 
 impl From<(u8, u8, u8)> for Rgb {
     fn from((r, g, b): (u8, u8, u8)) -> Self {
-        Rgb(f64::from(r), f64::from(g), f64::from(b))
+        Self::new(r, g, b)
     }
 }
 
@@ -96,6 +102,7 @@ pub struct Motion {
 /// The paint of one cell. Unset colors are the terminal's defaults, and an unset glyph keeps the
 /// text beneath.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct Ink {
     /// The glyph standing in for the text beneath.
     pub glyph: Option<char>,

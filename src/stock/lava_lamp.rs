@@ -14,7 +14,6 @@ pub(super) const RECIPE: Recipe = Recipe {
     blurb: "wax drifts behind the status line",
     credit: OPUS,
     needs: Glyphs::BASE,
-    wide: true,
     summon: |_| Box::<LavaLamp>::default(),
 };
 

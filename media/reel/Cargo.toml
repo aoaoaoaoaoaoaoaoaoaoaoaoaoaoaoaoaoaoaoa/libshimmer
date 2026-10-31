@@ -9,5 +9,6 @@ publish = false
 [workspace]
 
 [dependencies]
-libshimmer = { path = "../..", features = ["ratatui"] }
+libshimmer = { path = "../.." }
+libshimmer-ratatui = { path = "../../libshimmer-ratatui" }
 ratatui-core = { version = "0.1", features = ["underline-color"] }
