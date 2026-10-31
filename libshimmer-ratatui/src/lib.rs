@@ -63,6 +63,9 @@ impl RowExt for Row {
     }
 
     fn shade(&self, area: Rect, buf: &mut Buffer) {
+        if area.is_empty() {
+            return;
+        }
         for (x, &bg) in (area.x..area.right()).zip(self.backdrop()) {
             if let Some(cell) = buf.cell_mut((x, area.y)) {
                 cell.set_bg(color(bg));

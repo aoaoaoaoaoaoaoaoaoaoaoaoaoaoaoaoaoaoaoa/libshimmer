@@ -224,7 +224,7 @@ The crate-private types inside a shimmer are white, with members marked `~`; blu
 
 Intensity is one sticky number beside the spell. libshimmer knows only its value and its normalization: the host decides what it measures, and each shader how it shows it. A later intensity may carry up to three independent channels, each with a canonical projection onto fewer, so that a one-channel shader runs under any host. A host that learns of work in lumps pours them into a reservoir, the one owner of the drain time, and converts the flow into intensity by its own measure; the script drains its lumps the same way.
 
-Paint keeps one restraint across the roster: it styles a cell with color, bold, and underline, never italic, and it never scrambles the caption into other glyphs.
+Paint keeps one restraint across the roster: it styles a cell with color, bold, and underline, never italic, and it never scrambles the caption into other glyphs. A glyph that stands in for a letter belongs to a scene drawn over the caption, such as Fortress's miner or its floods, never to the letter.
 
 ## 4 Lifecycle
 
@@ -301,7 +301,7 @@ Solid arrows are calls, the dashed arrow a return, open arrowheads events. `loop
 | P5 | Each entry into `Idle` calls the shader's `idle` exactly once, when commanded; nothing else calls it. | unit test with a recording shader |
 | P6 | Painting changes nothing: `status` and `bullet` take `&self`. | signature |
 | P7 | The lead spans `len(mark) + (1 if mark) + width(caption) + len(tail)` columns, and the backdrop at most 80. | by construction: paint refuses a substitute of another width; test across `ROSTER` |
-| P8 | With still letters, the lead is the caption verbatim, without styling, tail, or backdrop; a still mark is absent. | test across `ROSTER` |
+| P8 | With still letters, the letters are the caption verbatim, without styling, and the row has no tail or backdrop; a still mark is absent. | test across `ROSTER` |
 | P9 | No caption, intensity, or Δt causes a panic. | `Intensity::new` saturates; property test |
 | P10 | Ticks never read colors; colors exist only at paint. | by construction: the stage holds no palette |
 | P11 | A recipe paints only the base glyphs and the repertoires it declares. | test across `ROSTER` on every glyph of a scripted take |

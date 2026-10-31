@@ -110,12 +110,7 @@ impl Shimmer {
     /// longer than [`STALE`] runs one tick and drops the remainders. Between bouts, shimmer time
     /// runs at a quarter of the host's.
     pub fn advance(&mut self, dt: Duration) {
-        let tempo = if self.stage.spell == Spell::Idle {
-            crate::rest::TEMPO
-        } else {
-            1.0
-        };
-        for _ in 0..self.clock.due(dt, tempo) {
+        for _ in 0..self.clock.due(dt, self.stage.spell) {
             let quanta = self.clock.quanta(self.stage.intensity);
             self.stage.advance(quanta);
             self.shader.tick(&self.stage);
@@ -153,23 +148,26 @@ impl fmt::Debug for Shimmer {
 /// Converts the host's Δt into whole ticks, and intensity into whole quanta.
 #[derive(Default)]
 struct Clock {
-    /// Time short of a whole tick.
-    owed: Duration,
+    /// Shimmer time short of a whole tick, in nanoseconds of the host's at rest, `DRAG` to a
+    /// nanosecond of shimmer time: every Δt adds whole units, so splitting it changes nothing (P3).
+    owed: u128,
     /// Quanta short of a whole one.
     carry: f64,
 }
 
 impl Clock {
-    /// The ticks due after `dt` of the host's time, while shimmer time runs at `tempo`.
-    fn due(&mut self, dt: Duration, tempo: f64) -> u32 {
+    /// The ticks due after `dt` of the host's time under `spell`.
+    fn due(&mut self, dt: Duration, spell: Spell) -> u32 {
         if dt > STALE {
             *self = Self::default();
             return 1;
         }
-        self.owed += dt.mul_f64(tempo);
+        let drag = u128::from(crate::rest::DRAG);
+        let tick = TICK.as_nanos() * drag;
+        self.owed += dt.as_nanos() * if spell == Spell::Idle { 1 } else { drag };
         let mut due = 0;
-        while self.owed >= TICK {
-            self.owed -= TICK;
+        while self.owed >= tick {
+            self.owed -= tick;
             due += 1;
         }
         due
@@ -249,13 +247,26 @@ mod tests {
     #[test]
     fn a_stale_gap_runs_one_tick() {
         let mut clock = Clock::default();
-        assert_eq!(clock.due(TICK / 2, 1.0), 0);
-        assert_eq!(clock.due(STALE + Duration::from_nanos(1), 1.0), 1);
+        assert_eq!(clock.due(TICK / 2, Busy), 0);
+        assert_eq!(clock.due(STALE + Duration::from_nanos(1), Busy), 1);
         assert_eq!(
-            clock.due(TICK / 2, 1.0),
+            clock.due(TICK / 2, Busy),
             0,
             "a stale gap drops the time owed"
         );
-        assert_eq!(clock.due(STALE, 1.0), 31);
+        assert_eq!(clock.due(STALE, Busy), 31);
+    }
+
+    /// P3 at rest: shimmer time keeps every nanosecond of the host's.
+    #[test]
+    fn rest_keeps_every_nanosecond() {
+        let mut clock = Clock::default();
+        let ns = Duration::from_nanos;
+        assert_eq!(clock.due(ns(1), Idle), 0);
+        assert_eq!(
+            clock.due((TICK * crate::rest::DRAG).checked_sub(ns(2)).unwrap(), Idle),
+            0
+        );
+        assert_eq!(clock.due(ns(1), Idle), 1);
     }
 }

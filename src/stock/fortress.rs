@@ -632,9 +632,12 @@ impl Fortress {
         }
     }
 
-    /// Walks the miner up to the rock face, then swings his pick at it as work comes in; whether he
-    /// stands at the face.
+    /// While the host is busy, walks the miner up to the rock face, then swings his pick at it as
+    /// work comes in; whether he works at the face.
     fn toil(&mut self, stage: &Stage) -> bool {
+        if !stage.busy() {
+            return false;
+        }
         let face = real(self.level.dug) - 0.5;
         let Some(miner) = self.miner.as_mut() else {
             return false;
@@ -1071,7 +1074,9 @@ impl Shader for Fortress {
         if let Some(miner) = self.miner.as_mut() {
             miner.arriving = (miner.arriving - TICK_SECS).max(0.0);
         }
-        self.doom -= TICK_SECS;
+        if stage.busy() {
+            self.doom -= TICK_SECS;
+        }
         if self.doom <= 0.0 {
             self.armed = true;
         }

@@ -9,9 +9,12 @@ use crate::paint::{Palette, Rgb};
 use crate::shimmer::Spell;
 use crate::stage::{Canvas, Stage};
 
-/// Shimmer time per second of the host's at rest, so that a resting recipe moves a quarter as
-/// fast.
-pub(crate) const TEMPO: f64 = 0.25;
+/// Seconds of the host's per second of shimmer time at rest, so that a resting recipe moves a
+/// quarter as fast. A whole number, so that the clock keeps rest's time exactly.
+pub(crate) const DRAG: u32 = 4;
+
+/// Shimmer time per second of the host's at rest.
+pub(crate) const TEMPO: f64 = 1.0 / DRAG as f64;
 
 /// The shortest lull, in seconds of shimmer time, between a resting recipe's moves: five of the
 /// host's. A move may be a brief burst, such as a moth's two wingbeats.
