@@ -41,15 +41,16 @@ const LEAD: usize = 2;
 /// Columns of the source's glow under the host's text past the tail.
 const GLOW: usize = 10;
 
-/// Dwarf Fortress's code page 437 tiles: a dwarf, the stairs, a deep liquid, remains, a web and a
-/// fireball.
+/// Dwarf Fortress's code page 437 tiles: a dwarf, the stairs, a deep liquid, remains, a web, a
+/// fireball and a demon.
 const DWARF: char = '☺';
 const UP: char = '<';
 const DOWN: char = '>';
 const LIQUID: char = '≈';
 const REMAINS: char = '%';
-const WEB: char = '≡';
+const WEB: char = '☼';
 const FIREBALL: char = '*';
+const DEMON: char = '&';
 /// Status icons, which classic Dwarf Fortress alternates with a creature's tile: a migrant, a
 /// dwarf without a job, a sleeper, and a blow landing left or right.
 const MIGRANT: char = 'X';
@@ -57,8 +58,6 @@ const JOBLESS: char = '?';
 const SLEEP: char = 'Z';
 const LEFT: char = '←';
 const RIGHT: char = '→';
-/// Generated demons' tiles.
-const FIENDS: [char; 8] = ['B', 'D', 'G', 'H', 'M', 'U', 'W', 'Y'];
 
 /// Dwarf Fortress's light grey: miners, and giant cave spiders.
 const GREY: Rgb = Rgb(192.0, 192.0, 192.0);
@@ -438,10 +437,9 @@ enum Power {
     Claws,
 }
 
-/// A fortress's demons, generated at its embark: their tile, color and power.
+/// A fortress's demons, generated at its embark: their color and power.
 #[derive(Clone, Copy)]
 struct Fiend {
-    tile: char,
     color: usize,
     power: Power,
 }
@@ -449,7 +447,6 @@ struct Fiend {
 impl Fiend {
     fn summon(rng: &mut Rng) -> Self {
         Self {
-            tile: FIENDS[rng.below(FIENDS.len())],
             color: rng.below(FIENDISH.len()),
             power: [Power::Fire, Power::Web, Power::Claws][rng.below(3)],
         }
@@ -1136,10 +1133,7 @@ impl Paint<'_> {
         let (glyph, color) = match foe.kind {
             Kind::Spider => ('S', GREY),
             Kind::Imp => ('i', AMBER),
-            Kind::Demon => (
-                self.fortress.fiend.tile,
-                FIENDISH[self.fortress.fiend.color],
-            ),
+            Kind::Demon => (DEMON, FIENDISH[self.fortress.fiend.color]),
         };
         let glyph = if foe.swing.is_some() && self.fortress.blink(LUNGE) {
             LEFT
