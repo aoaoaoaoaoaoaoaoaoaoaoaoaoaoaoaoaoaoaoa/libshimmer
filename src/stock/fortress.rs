@@ -4,10 +4,11 @@
 //! fortress persists from bout to bout, digging ever deeper through soil, stone, the caverns and
 //! the magma sea to raw adamantine and the underworld beneath it. Warm or damp stone gives the
 //! miner pause before he breaches magma or water, which floods the corridor; giant cave spiders,
-//! fire imps and demons chase him toward the up stair, and a dwarf on fire flashes red and
-//! yellow. About once every quarter hour of work the fun is fatal, and migrants take up the pick;
-//! the underworld ends the fortress, and a new one embarks. While the host waits the miner has no
-//! job and shows `?`; between bouts he sleeps, now and then a `Z`.
+//! fire imps and demons chase him toward the up stair, goblin sieges come down it while he digs
+//! on, his job never cancelled, and a dwarf on fire flashes red and yellow. About once every
+//! quarter hour of work the fun is fatal, and migrants take up the pick; the underworld ends the
+//! fortress, and a new one embarks. While the host waits the miner has no job and shows `?`;
+//! between bouts he sleeps, now and then a `Z`.
 
 use std::iter;
 
@@ -61,6 +62,8 @@ const RIGHT: char = '→';
 
 /// Dwarf Fortress's light grey: miners, and giant cave spiders.
 const GREY: Rgb = Rgb(192.0, 192.0, 192.0);
+/// Dwarf Fortress's dark grey: every military profession's color, a goblin siege's too.
+const MILITARY: Rgb = Rgb(128.0, 128.0, 128.0);
 /// A burning creature flashes between these.
 const FLAME: Rgb = Rgb(255.0, 72.0, 24.0);
 const BLAZE: Rgb = Rgb(255.0, 226.0, 64.0);
@@ -131,13 +134,16 @@ const STRIKE: u64 = 30;
 const STRIKE_FADE: f64 = 0.25;
 /// Mean seconds of work between fatal fun.
 const DOOM: f64 = 1000.0;
+/// Tiles dug when a siege comes down the stair: half the rock.
+const SIEGE_AT: usize = ROCK / 2;
 
-/// Tiles a second: the miner walking to work and fleeing, a giant cave spider, a demon, a fire imp
-/// swimming, and a bolt in flight.
+/// Tiles a second: the miner walking to work and fleeing, a giant cave spider, a demon, a goblin
+/// marching, a fire imp swimming, and a bolt in flight.
 const WALK: f64 = 4.0;
 const RUN: f64 = 7.0;
 const SPIDER_PACE: f64 = 9.5;
 const DEMON_PACE: f64 = 9.0;
+const GOBLIN_PACE: f64 = 4.5;
 const IMP_PACE: f64 = 2.0;
 const BOLT_PACE: f64 = 12.0;
 /// Tiles between blows.
@@ -161,7 +167,8 @@ const BREATH: f64 = 0.6;
 /// Seconds between a fire imp's fireballs and a demon's breaths or webs.
 const IMP_RELOAD: f64 = 1.8;
 const DEMON_RELOAD: f64 = 2.8;
-/// Seconds between demons pouring out of the underworld.
+/// Seconds between a horde's creatures: demons pouring out of the underworld, or goblins coming
+/// down the stair.
 const HORDE_GAP: f64 = 0.55;
 /// Seconds: paused at warm or damp stone, showing a migrant's `X`, before migrants come, before a lost
 /// corridor's replacement opens, stepping down a stair, and before a fallen fortress's successor
@@ -184,7 +191,7 @@ const SNORE: Lottery = Lottery {
     seed: 41,
 };
 
-/// What waits past a corridor's end.
+/// A level's fun: what waits past the corridor's end, or a siege that comes down its stair.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Fun {
     /// An aquifer or a cavern lake, which floods the corridor.
@@ -193,6 +200,8 @@ enum Fun {
     Magma,
     /// A cavern where a giant cave spider lurks.
     Spider,
+    /// A goblin siege, which comes down the up stair halfway along the corridor.
+    Siege,
     /// The underworld beneath raw adamantine, whose demons end the fortress.
     Circus,
 }
@@ -290,13 +299,15 @@ fn odds(depth: u32) -> f64 {
     }
 }
 
-/// The fun a level at `depth` may hide: water above the caverns, spiders in them, and magma below.
+/// The fun a level at `depth` may hide: water above the caverns, spiders in them, and magma below;
+/// and once the fortress has struck stone, a siege at any depth.
 fn fun_at(rng: &mut Rng, depth: u32) -> Fun {
     let menu: &[Fun] = match depth {
-        0..CAVERNS_AT => &[Fun::Water],
-        CAVERNS_AT..DEEP_AT => &[Fun::Water, Fun::Spider],
-        DEEP_AT..MAGMA_AT => &[Fun::Water, Fun::Spider, Fun::Magma],
-        _ => &[Fun::Magma],
+        0..STONE_AT => &[Fun::Water],
+        STONE_AT..CAVERNS_AT => &[Fun::Water, Fun::Siege],
+        CAVERNS_AT..DEEP_AT => &[Fun::Water, Fun::Spider, Fun::Siege],
+        DEEP_AT..MAGMA_AT => &[Fun::Water, Fun::Spider, Fun::Magma, Fun::Siege],
+        _ => &[Fun::Magma, Fun::Siege],
     };
     menu[rng.below(menu.len())]
 }
@@ -376,6 +387,7 @@ impl Flood {
 enum Kind {
     Spider,
     Imp,
+    Goblin,
     Demon,
 }
 
@@ -420,7 +432,8 @@ struct Shot {
 enum Body {
     Dwarf,
     Charred,
-    Spider,
+    /// A creature the miner slew.
+    Creature,
     Gore,
 }
 
@@ -466,8 +479,8 @@ struct Miner {
     soaked: f64,
     /// Seconds left standing stunned at a breach.
     stunned: f64,
-    /// Whether he stands to fight rather than flee.
-    stand: bool,
+    /// Whether he flees, fights, or digs on.
+    stance: Stance,
     /// Seconds into the blow he is landing.
     swing: Option<f64>,
 }
@@ -481,10 +494,21 @@ impl Miner {
             webbed: 0.0,
             soaked: 0.0,
             stunned: 0.0,
-            stand: false,
+            stance: Stance::Flee,
             swing: None,
         }
     }
+}
+
+/// What the miner does about the fun.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stance {
+    /// He runs for the up stair.
+    Flee,
+    /// He stands and strikes whatever reaches him.
+    Fight,
+    /// He digs on, his job never cancelled.
+    Toil,
 }
 
 /// Where the fortress stands.
@@ -494,7 +518,7 @@ enum Phase {
     Dig,
     /// He found warm or damp stone and stopped, `left` seconds before he goes on.
     Wary { left: f64 },
-    /// The corridor is breached.
+    /// The fun breaks in: the corridor's end opens, or a siege comes down the stair.
     Breach,
     /// The miner is dead; migrants arrive in `left` seconds.
     Mourn { left: f64 },
@@ -593,44 +617,50 @@ impl Fortress {
     }
 
     fn dig(&mut self, stage: &Stage) {
-        let face = real(self.level.dug) - 0.5;
-        let Some(miner) = self.miner.as_mut() else {
-            return;
-        };
-        if miner.x < face {
-            miner.x = (miner.x + WALK * TICK_SECS).min(face);
+        if !self.toil(stage) {
             return;
         }
-        if self.level.dug == TILES {
-            self.phase = Phase::Descend { left: STEP_DOWN };
-            return;
-        }
-        let fresh = u64::from(stage.fresh());
-        self.swings += fresh;
-        if self.swings >= STRIKE {
-            self.swings %= STRIKE;
-            self.strike = 1.0;
-        }
-        self.level.chips += fresh;
-        while self.level.chips >= DIG && self.level.dug < TILES {
-            self.level.chips -= DIG;
-            self.level.dug += 1;
-            if self.level.dug + 2 == TILES
-                && matches!(self.level.fun, Some(Fun::Water | Fun::Magma))
-            {
+        let (fun, dug) = (self.level.fun, self.level.dug);
+        match fun {
+            Some(Fun::Water | Fun::Magma) if !self.level.found && dug + 2 >= TILES => {
                 self.level.found = true;
                 self.phase = Phase::Wary { left: WARY };
             }
-        }
-        if self.level.dug == TILES {
-            match self.level.fun {
-                Some(fun) => self.breach(fun),
-                None => self.phase = Phase::Descend { left: STEP_DOWN },
-            }
+            Some(Fun::Siege) if dug >= SIEGE_AT => self.breach(Fun::Siege),
+            Some(fun) if dug == TILES => self.breach(fun),
+            None if dug == TILES => self.phase = Phase::Descend { left: STEP_DOWN },
+            _ => {}
         }
     }
 
-    /// Opens the corridor's end onto `fun`.
+    /// Walks the miner up to the rock face, then swings his pick at it as work comes in; whether he
+    /// stands at the face.
+    fn toil(&mut self, stage: &Stage) -> bool {
+        let face = real(self.level.dug) - 0.5;
+        let Some(miner) = self.miner.as_mut() else {
+            return false;
+        };
+        if miner.x < face {
+            miner.x = (miner.x + WALK * TICK_SECS).min(face);
+            return false;
+        }
+        if self.level.dug < TILES {
+            let fresh = u64::from(stage.fresh());
+            self.swings += fresh;
+            if self.swings >= STRIKE {
+                self.swings %= STRIKE;
+                self.strike = 1.0;
+            }
+            self.level.chips += fresh;
+            while self.level.chips >= DIG && self.level.dug < TILES {
+                self.level.chips -= DIG;
+                self.level.dug += 1;
+            }
+        }
+        true
+    }
+
+    /// Lets `fun` in: the corridor's end opens onto it, or it comes down the stair.
     fn breach(&mut self, fun: Fun) {
         let fatal = self.level.fatal;
         self.phase = Phase::Breach;
@@ -645,7 +675,7 @@ impl Fortress {
                 }
             }
             Fun::Spider => self.foes.push(Foe::new(Kind::Spider, beyond + 5.0)),
-            Fun::Circus => {
+            Fun::Siege | Fun::Circus => {
                 self.horde = 3 + self.rng.below(3);
                 self.spawn = 0.0;
             }
@@ -653,7 +683,12 @@ impl Fortress {
         let Some(miner) = self.miner.as_mut() else {
             return;
         };
-        miner.stand = fun == Fun::Spider && !fatal;
+        miner.stance = match (fun, fatal) {
+            (Fun::Spider | Fun::Siege, false) => Stance::Fight,
+            // his dig job is never cancelled
+            (Fun::Siege, true) => Stance::Toil,
+            _ => Stance::Flee,
+        };
         miner.stunned = match (fun, fatal) {
             // swept off his feet where he stands
             (Fun::Water | Fun::Magma, true) => f64::INFINITY,
@@ -662,7 +697,7 @@ impl Fortress {
     }
 
     /// One tick of the fun: the flood, the horde, the miner, the creatures and their bolts.
-    fn rampage(&mut self) {
+    fn rampage(&mut self, stage: &Stage) {
         if let Some(flood) = self.flood.as_mut() {
             flood.due -= TICK_SECS;
             while flood.due <= 0.0 {
@@ -675,12 +710,36 @@ impl Fortress {
             if self.spawn <= 0.0 {
                 self.horde -= 1;
                 self.spawn = HORDE_GAP;
-                self.foes.push(Foe::new(Kind::Demon, real(TILES) + 3.0));
+                let foe = if self.level.fun == Some(Fun::Siege) {
+                    Foe::new(Kind::Goblin, STAIR)
+                } else {
+                    Foe::new(Kind::Demon, real(TILES) + 3.0)
+                };
+                self.foes.push(foe);
             }
+        }
+        if self.level.fun == Some(Fun::Siege) && self.toiling() {
+            self.toil(stage);
         }
         self.flee();
         self.hunt();
         self.fly();
+    }
+
+    /// Whether the miner digs through the fun: always while he toils, and between foes while he
+    /// fights.
+    fn toiling(&self) -> bool {
+        self.miner.as_ref().is_some_and(|miner| match miner.stance {
+            Stance::Toil => true,
+            Stance::Fight => {
+                miner.swing.is_none()
+                    && !self
+                        .foes
+                        .iter()
+                        .any(|foe| (foe.x - miner.x).abs() <= REACH + 0.05)
+            }
+            Stance::Flee => false,
+        })
     }
 
     /// The liquid on tile `tile` and its depth, if any.
@@ -691,7 +750,7 @@ impl Fortress {
             .filter(|&(_, depth)| depth > 0)
     }
 
-    /// The miner's tick in the fun: he burns, drowns, fights or flees for the up stair.
+    /// The miner's tick in the fun: he burns, drowns, fights, digs on, or flees for the up stair.
     fn flee(&mut self) {
         let fatal = self.level.fatal;
         let grappled = self.foes.iter().any(|foe| foe.swing.is_some());
@@ -726,7 +785,7 @@ impl Fortress {
             miner.stunned -= TICK_SECS;
         } else if miner.webbed > 0.0 {
             miner.webbed -= TICK_SECS;
-        } else if !miner.stand && miner.swing.is_none() && !grappled {
+        } else if miner.stance == Stance::Flee && miner.swing.is_none() && !grappled {
             let pace = if depth >= SWIMMING { RUN / 2.0 } else { RUN };
             miner.x -= pace * TICK_SECS;
         }
@@ -749,7 +808,7 @@ impl Fortress {
     }
 
     /// The creatures' tick: they chase the miner, strike, shoot and breathe fire; once he is
-    /// gone, spiders slink home and demons roam.
+    /// gone, spiders slink home, goblins march back up the stair, and demons roam.
     fn hunt(&mut self) {
         let fatal = self.level.fatal;
         let target = self.miner.as_ref().map(|miner| miner.x);
@@ -778,6 +837,7 @@ impl Fortress {
                 foe.x += match foe.kind {
                     Kind::Spider => SPIDER_PACE * TICK_SECS,
                     Kind::Imp => 0.0,
+                    Kind::Goblin => -GOBLIN_PACE * TICK_SECS,
                     Kind::Demon => foe.heading * DEMON_PACE * 0.3 * TICK_SECS,
                 };
                 continue;
@@ -795,6 +855,15 @@ impl Fortress {
                             x: foe.x - 0.5,
                             hits: fatal,
                         });
+                    }
+                }
+                Kind::Goblin => {
+                    // marching down from the stair behind him
+                    if x - foe.x > REACH {
+                        foe.x = (foe.x + GOBLIN_PACE * TICK_SECS).min(x - REACH);
+                    }
+                    if x - foe.x <= REACH && fatal && foe.swing.is_none() && !killed {
+                        foe.swing = Some(0.0);
                     }
                 }
                 Kind::Spider | Kind::Demon => {
@@ -831,9 +900,12 @@ impl Fortress {
             }
         }
         if let Some(miner) = self.miner.as_mut()
-            && miner.stand
+            && miner.stance == Stance::Fight
             && miner.swing.is_none()
-            && self.foes.iter().any(|foe| foe.x - miner.x <= REACH + 0.05)
+            && self
+                .foes
+                .iter()
+                .any(|foe| (foe.x - miner.x).abs() <= REACH + 0.05)
         {
             miner.swing = Some(0.0);
         }
@@ -847,7 +919,8 @@ impl Fortress {
             }
         }
         self.shots.extend(bolts);
-        self.foes.retain(|foe| foe.x < real(TILES) + 8.0);
+        self.foes
+            .retain(|foe| foe.x >= STAIR && foe.x < real(TILES) + 8.0);
         if killed {
             self.die(Body::Gore);
         }
@@ -889,25 +962,31 @@ impl Fortress {
         }
     }
 
-    /// The miner's blow lands: the creature beside him dies.
+    /// The miner's blow lands: the creature beside him dies, and the fun ends with the last one.
     fn slay(&mut self) {
         let Some(miner) = self.miner.as_mut() else {
             return;
         };
         miner.swing = None;
-        miner.stand = false;
         let x = miner.x;
-        if let Some(index) = self.foes.iter().position(|foe| foe.x - x <= REACH + 0.05) {
+        if let Some(index) = self
+            .foes
+            .iter()
+            .position(|foe| (foe.x - x).abs() <= REACH + 0.05)
+        {
             let foe = self.foes.remove(index);
             self.spatter(foe.x, 0.7);
             self.remains.push(Remains {
                 x: foe.x,
-                body: Body::Spider,
+                body: Body::Creature,
             });
         }
-        if self.foes.is_empty() && self.flood.is_none() {
+        if self.foes.is_empty() && self.flood.is_none() && self.horde == 0 {
             self.level.fun = None;
             self.phase = Phase::Dig;
+            if let Some(miner) = self.miner.as_mut() {
+                miner.stance = Stance::Flee;
+            }
         }
     }
 
@@ -928,6 +1007,7 @@ impl Fortress {
         for foe in &mut self.foes {
             foe.swing = None;
         }
+        self.horde = 0;
         self.level.fatal = false;
         self.phase = if self.level.fun == Some(Fun::Circus) {
             Phase::Fallen { left: FALLEN }
@@ -1001,7 +1081,7 @@ impl Shader for Fortress {
         }
         match self.phase {
             Phase::Dig => self.dig(stage),
-            Phase::Breach | Phase::Mourn { .. } | Phase::Sealed { .. } => self.rampage(),
+            Phase::Breach | Phase::Mourn { .. } | Phase::Sealed { .. } => self.rampage(stage),
             Phase::Fallen { .. } => self.roam(),
             Phase::Wary { .. } | Phase::Descend { .. } => {}
         }
@@ -1120,7 +1200,12 @@ impl Paint<'_> {
         } else if !resting && jobless && fortress.blink(BLINK) {
             JOBLESS
         } else if miner.swing.is_some() && fortress.blink(LUNGE) {
-            RIGHT
+            // his blow lands on the foes' side
+            if fortress.foes.iter().any(|foe| foe.x < miner.x) {
+                LEFT
+            } else {
+                RIGHT
+            }
         } else {
             DWARF
         };
@@ -1133,10 +1218,13 @@ impl Paint<'_> {
         let (glyph, color) = match foe.kind {
             Kind::Spider => ('S', GREY),
             Kind::Imp => ('i', AMBER),
+            Kind::Goblin => ('g', MILITARY),
             Kind::Demon => (DEMON, FIENDISH[self.fortress.fiend.color]),
         };
         let glyph = if foe.swing.is_some() && self.fortress.blink(LUNGE) {
-            LEFT
+            // its blow lands toward the miner
+            let miner = self.fortress.miner.as_ref().map_or(foe.x, |miner| miner.x);
+            if miner < foe.x { LEFT } else { RIGHT }
         } else {
             glyph
         };
@@ -1180,7 +1268,7 @@ impl Paint<'_> {
             .find(|remains| within(remains.x))
             .map(|remains| {
                 let color = match remains.body {
-                    Body::Dwarf | Body::Spider => GREY,
+                    Body::Dwarf | Body::Creature => GREY,
                     Body::Charred => CHAR,
                     Body::Gore => BLOOD,
                 };
