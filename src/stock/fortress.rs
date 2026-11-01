@@ -268,6 +268,11 @@ impl Level {
         }
     }
 
+    /// Where the miner stands to dig: amid the last tile dug, or on the up stair before the first.
+    fn face(&self) -> f64 {
+        STAIR + real(self.dug)
+    }
+
     /// The color of rock tile `tile`'s stone and of the vein in it, if any.
     fn rock(&self, tile: usize) -> (Rgb, Option<Rgb>) {
         let stones: &[Rgb] = match self.depth {
@@ -638,7 +643,7 @@ impl Fortress {
         if !stage.busy() {
             return false;
         }
-        let face = real(self.level.dug) - 0.5;
+        let face = self.level.face();
         let Some(miner) = self.miner.as_mut() else {
             return false;
         };
@@ -1119,18 +1124,24 @@ impl Shader for Fortress {
         };
         let count = stage.caption.len();
         let per = real(ROCK) / real(count.max(1));
+        // the pick strikes the first rock cell past where the miner stands to dig
+        let face = self.level.face();
+        let struck = (0..count)
+            .map(|index| real(index) * per)
+            .chain((ROCK..TILES).map(real))
+            .position(|from| from > face);
         let mut shades = Vec::new();
         canvas.mark = vec![paint.mark()];
         canvas.letters = stage.letters(|index, letter| {
             let from = real(index) * per;
-            let ink = paint.cell(from, from + per, false);
+            let ink = paint.cell(from, from + per, false, struck == Some(index));
             shades.push((ink.bg, letter.width()));
             ink
         });
         canvas.tail = (0..TAIL)
             .map(|cell| {
                 let from = real(ROCK + cell);
-                let ink = paint.cell(from, from + 1.0, true);
+                let ink = paint.cell(from, from + 1.0, true, struck == Some(count + cell));
                 shades.push((ink.bg, 1));
                 ink
             })
@@ -1281,14 +1292,15 @@ impl Paint<'_> {
     }
 
     /// The cell over tiles `from` to `to`: rock or floor, with whatever stands, lies or flows
-    /// there.
-    fn cell(&self, from: f64, to: f64, tail: bool) -> Ink {
+    /// there; `struck` when the pick strikes it. A cell is floor once the miner can stand in it
+    /// to dig, so one spanning several tiles opens as he steps in and he never stands on rock.
+    fn cell(&self, from: f64, to: f64, tail: bool, struck: bool) -> Ink {
         let fortress = self.fortress;
         let level = &fortress.level;
         let palette = self.palette;
         let tiles = tile(from)..=tile((to - 1e-6).max(from));
         let middle = tile(f64::midpoint(from, to));
-        let dug = middle < level.dug;
+        let dug = from <= level.face();
         let fire = tiles.clone().any(|at| fortress.fire[at] > 0.0);
         let liquid = tiles
             .clone()
@@ -1329,7 +1341,7 @@ impl Paint<'_> {
                 };
                 rock = sign.blend(rock, FOUND_TINT);
             }
-            if tiles.contains(&level.dug) {
+            if struck {
                 rock = palette.fg.blend(rock, 0.2 * fortress.strike);
             }
             (Some(rock), None)
